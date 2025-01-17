@@ -18,13 +18,12 @@
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import pkgutil
 import re
 
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Union, overload
 
 
 # Here we use type Any because we need to parse and return the generic JSON
@@ -40,9 +39,9 @@ def parse_json_from_ts(ts_file_contents: str) -> Dict[str, Any]:
         dict. The dict representation of JSON object in the TS file.
     """
     text_without_comments = remove_comments(ts_file_contents)
-    json_start = text_without_comments.find('{\n')
+    json_start = text_without_comments.index('{\n')
     # Add 1 to index returned because the '}' is part of the JSON object.
-    json_end = text_without_comments.rfind('}') + 1
+    json_end = text_without_comments.rindex('}') + 1
     # Here we use type Any because 'json_dict' is a generic JSON object and
     # generic JSON objects are of type Dict[str, Any].
     json_dict: Dict[str, Any] = (
@@ -66,7 +65,25 @@ def remove_comments(text: str) -> str:
 # the chronology of our files execution. utils imports constants and constants
 # need utils.get_package_file_contents but it does not have it loaded to memory
 # yet. If called from utils we get error as `module has no attribute`.
-def get_package_file_contents(package: str, filepath: str) -> str:
+@overload
+def get_package_file_contents(
+    package: str, filepath: str, *, binary_mode: Literal[True]
+) -> bytes: ...
+
+
+@overload
+def get_package_file_contents(package: str, filepath: str) -> str: ...
+
+
+@overload
+def get_package_file_contents(
+    package: str, filepath: str, *, binary_mode: Literal[False]
+) -> str: ...
+
+
+def get_package_file_contents(
+    package: str, filepath: str, *, binary_mode: bool = False
+) -> Union[str, bytes]:
     """Open file and return its contents. This needs to be used for files that
     are loaded by the Python code directly, like constants.ts or
     rich_text_components.json. This function is needed to make loading these
@@ -77,15 +94,23 @@ def get_package_file_contents(package: str, filepath: str) -> str:
             For Oppia the package is usually the folder in the root folder,
             like 'core' or 'extensions'.
         filepath: str. The path to the file in the package.
+        binary_mode: bool. True when we want to read file in binary mode.
 
     Returns:
         str. The contents of the file.
 
     Raises:
+        Exception. Test error for debugging.
         FileNotFoundError. The file does not exist.
     """
     try:
-        with io.open(
+        if binary_mode:
+            with open(
+                os.path.join(package, filepath), 'rb', encoding=None
+            ) as binary_file:
+                read_binary_mode_data: bytes = binary_file.read()
+                return read_binary_mode_data
+        with open(
             os.path.join(package, filepath), 'r', encoding='utf-8'
         ) as file:
             return file.read()
@@ -93,6 +118,8 @@ def get_package_file_contents(package: str, filepath: str) -> str:
         file_data = pkgutil.get_data(package, filepath)
         if file_data is None:
             raise e
+        if binary_mode:
+            return file_data
         return file_data.decode('utf-8')
 
 

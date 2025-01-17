@@ -16,20 +16,21 @@
  * @fileoverview Module for the classroom page.
  */
 
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { NgModule } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import {CommonModule} from '@angular/common';
+import {FormsModule} from '@angular/forms';
+import {NgModule} from '@angular/core';
+import {TranslateModule} from '@ngx-translate/core';
 
-import { BackgroundBannerModule } from 'components/common-layout-directives/common-elements/background-banner.module';
-import { BaseModule } from 'base-components/base.module';
-import { ClassroomPageComponent } from './classroom-page.component';
-import { ClassroomPageRootComponent } from './classroom-page-root.component';
-import { ClassroomPageRoutingModule } from './classroom-page-routing.module';
-import { RichTextComponentsModule } from 'rich_text_components/rich-text-components.module';
-import { SearchBarModule } from 'pages/library-page/search-bar/search-bar.module';
-import { StringUtilityPipesModule } from 'filters/string-utility-filters/string-utility-pipes.module';
-import { TopicSummaryTileComponent } from 'components/summary-tile/topic-summary-tile.component';
+import {BackgroundBannerModule} from 'components/common-layout-directives/common-elements/background-banner.module';
+import {BaseModule} from 'base-components/base.module';
+import {ClassroomPageComponent} from './classroom-page.component';
+import {ClassroomPageRootComponent} from './classroom-page-root.component';
+import {ClassroomPageRoutingModule} from './classroom-page-routing.module';
+import {RichTextComponentsModule} from 'rich_text_components/rich-text-components.module';
+import {SearchBarModule} from 'pages/library-page/search-bar/search-bar.module';
+import {StringUtilityPipesModule} from 'filters/string-utility-filters/string-utility-pipes.module';
+import {SummaryTilesModule} from 'components/summary-tile/summary-tile.module';
+import {Error404PageModule} from 'pages/error-pages/error-404/error-404-page.module';
 
 @NgModule({
   imports: [
@@ -41,17 +42,11 @@ import { TopicSummaryTileComponent } from 'components/summary-tile/topic-summary
     RichTextComponentsModule,
     SearchBarModule,
     StringUtilityPipesModule,
+    SummaryTilesModule,
     TranslateModule,
+    Error404PageModule,
   ],
-  declarations: [
-    ClassroomPageComponent,
-    ClassroomPageRootComponent,
-    TopicSummaryTileComponent,
-  ],
-  entryComponents: [
-    ClassroomPageComponent,
-    ClassroomPageRootComponent,
-    TopicSummaryTileComponent
-  ]
+  declarations: [ClassroomPageComponent, ClassroomPageRootComponent],
+  entryComponents: [ClassroomPageComponent, ClassroomPageRootComponent],
 })
 export class ClassroomPageModule {}

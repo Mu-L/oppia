@@ -16,30 +16,30 @@
  * @fileoverview Component for question editor save modal.
  */
 
-import { Component, OnInit } from '@angular/core';
-import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
-import { AppConstants } from 'app.constants';
-import { ConfirmOrCancelModal } from 'components/common-layout-directives/common-elements/confirm-or-cancel-modal.component';
+import {Component, OnInit} from '@angular/core';
+import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
+import {AppConstants} from 'app.constants';
+import {ConfirmOrCancelModal} from 'components/common-layout-directives/common-elements/confirm-or-cancel-modal.component';
 
 @Component({
   selector: 'oppia-question-editor-save-modal',
-  templateUrl: './question-editor-save-modal.component.html'
+  templateUrl: './question-editor-save-modal.component.html',
 })
-export class QuestionEditorSaveModalComponent extends ConfirmOrCancelModal
-  implements OnInit {
+export class QuestionEditorSaveModalComponent
+  extends ConfirmOrCancelModal
+  implements OnInit
+{
   // This property is initialized using Angular lifecycle hooks
   // and we need to do non-null assertion. For more information, see
   // https://github.com/oppia/oppia/wiki/Guide-on-defining-types#ts-7-1
+  commitMessage: string = '';
   MAX_COMMIT_MESSAGE_LENGTH!: number;
 
-  constructor(
-    private ngbActiveModal: NgbActiveModal,
-  ) {
+  constructor(private ngbActiveModal: NgbActiveModal) {
     super(ngbActiveModal);
   }
 
   ngOnInit(): void {
-    this.MAX_COMMIT_MESSAGE_LENGTH = (
-      AppConstants.MAX_COMMIT_MESSAGE_LENGTH);
+    this.MAX_COMMIT_MESSAGE_LENGTH = AppConstants.MAX_COMMIT_MESSAGE_LENGTH;
   }
 }

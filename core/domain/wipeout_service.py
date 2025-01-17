@@ -28,6 +28,9 @@ from core.domain import collection_services
 from core.domain import email_manager
 from core.domain import exp_fetchers
 from core.domain import exp_services
+from core.domain import fs_services
+from core.domain import platform_parameter_list
+from core.domain import platform_parameter_services
 from core.domain import rights_domain
 from core.domain import rights_manager
 from core.domain import taskqueue_services
@@ -49,6 +52,7 @@ if MYPY:  # pragma: no cover
     from mypy_imports import datastore_services
     from mypy_imports import exp_models
     from mypy_imports import feedback_models
+    from mypy_imports import improvements_models
     from mypy_imports import question_models
     from mypy_imports import skill_models
     from mypy_imports import story_models
@@ -59,16 +63,19 @@ if MYPY:  # pragma: no cover
     from mypy_imports import user_models
 
 (
-    app_feedback_report_models, base_models, blog_models,
-    collection_models, config_models, exp_models, feedback_models,
-    question_models, skill_models, story_models, subtopic_models,
-    suggestion_models, topic_models, user_models
+    app_feedback_report_models, base_models,
+    blog_models, collection_models, config_models,
+    exp_models, feedback_models, improvements_models,
+    question_models, skill_models, story_models,
+    subtopic_models, suggestion_models, topic_models,
+    user_models
 ) = models.Registry.import_models([
     models.Names.APP_FEEDBACK_REPORT, models.Names.BASE_MODEL,
     models.Names.BLOG, models.Names.COLLECTION, models.Names.CONFIG,
-    models.Names.EXPLORATION, models.Names.FEEDBACK, models.Names.QUESTION,
-    models.Names.SKILL, models.Names.STORY, models.Names.SUBTOPIC,
-    models.Names.SUGGESTION, models.Names.TOPIC, models.Names.USER,
+    models.Names.EXPLORATION, models.Names.FEEDBACK, models.Names.IMPROVEMENTS,
+    models.Names.QUESTION, models.Names.SKILL, models.Names.STORY,
+    models.Names.SUBTOPIC, models.Names.SUGGESTION, models.Names.TOPIC,
+    models.Names.USER,
 ])
 
 datastore_services = models.Registry.import_datastore_services()
@@ -97,6 +104,7 @@ def get_pending_deletion_request(
         user_models.PendingDeletionRequestModel.get_by_id(user_id))
     return wipeout_domain.PendingDeletionRequest(
         pending_deletion_request_model.id,
+        pending_deletion_request_model.username,
         pending_deletion_request_model.email,
         pending_deletion_request_model.normalized_long_term_username,
         pending_deletion_request_model.deletion_complete,
@@ -133,6 +141,7 @@ def save_pending_deletion_requests(
             pending_deletion_request_models, pending_deletion_requests):
         deletion_request.validate()
         deletion_request_dict = {
+            'username': deletion_request.username,
             'email': deletion_request.email,
             'normalized_long_term_username': (
                 deletion_request.normalized_long_term_username),
@@ -187,6 +196,7 @@ def pre_delete_user(user_id: str) -> None:
         pending_deletion_requests.append(
             wipeout_domain.PendingDeletionRequest.create_default(
                 profile_id,
+                profile_user_settings.username,
                 profile_user_settings.email
             )
         )
@@ -220,6 +230,7 @@ def pre_delete_user(user_id: str) -> None:
     pending_deletion_requests.append(
         wipeout_domain.PendingDeletionRequest.create_default(
             user_id,
+            user_settings.username,
             user_settings.email,
             normalized_long_term_username=normalized_long_term_username
         )
@@ -257,7 +268,12 @@ def delete_users_pending_to_be_deleted() -> None:
         )
 
     email_subject = 'User Deletion job result'
-    if feconf.CAN_SEND_EMAILS:
+    server_can_send_emails = (
+        platform_parameter_services.get_platform_parameter_value(
+            platform_parameter_list.ParamName.SERVER_CAN_SEND_EMAILS.value
+        )
+    )
+    if server_can_send_emails:
         email_manager.send_mail_to_admin(email_subject, email_message)
 
 
@@ -284,7 +300,12 @@ def check_completion_of_user_deletion() -> None:
         # or 'FAILURE'.
         completion_status = run_user_deletion_completion(
             pending_deletion_request)
-        if feconf.CAN_SEND_EMAILS:
+        server_can_send_emails = (
+            platform_parameter_services.get_platform_parameter_value(
+                platform_parameter_list.ParamName.SERVER_CAN_SEND_EMAILS.value
+            )
+        )
+        if server_can_send_emails:
             email_message += '\n-----------------------------------\n'
             email_message += (
                 'PendingDeletionRequestModel ID: %s\n'
@@ -346,14 +367,24 @@ def run_user_deletion_completion(
         if pending_deletion_request.normalized_long_term_username is not None:
             user_services.save_deleted_username(
                 pending_deletion_request.normalized_long_term_username)
-        if feconf.CAN_SEND_EMAILS:
+        server_can_send_emails = (
+            platform_parameter_services.get_platform_parameter_value(
+                platform_parameter_list.ParamName.SERVER_CAN_SEND_EMAILS.value
+            )
+        )
+        if server_can_send_emails:
             email_manager.send_account_deleted_email(
                 pending_deletion_request.user_id,
                 pending_deletion_request.email
             )
         return wipeout_domain.USER_VERIFICATION_SUCCESS
     else:
-        if feconf.CAN_SEND_EMAILS:
+        server_can_send_emails = (
+            platform_parameter_services.get_platform_parameter_value(
+                platform_parameter_list.ParamName.SERVER_CAN_SEND_EMAILS.value
+            )
+        )
+        if server_can_send_emails:
             email_manager.send_account_deletion_failed_email(
                 pending_deletion_request.user_id,
                 pending_deletion_request.email
@@ -376,6 +407,73 @@ def _delete_models_with_delete_at_end_policy(user_id: str) -> None:
             model_class.apply_deletion_policy(user_id)
 
 
+def _delete_profile_picture(
+    pending_deletion_request: wipeout_domain.PendingDeletionRequest
+) -> None:
+    """Verify that the profile picture is deleted.
+
+    Args:
+        pending_deletion_request: PendingDeletionRequest. The pending deletion
+            request object for which to delete or pseudonymize all the models.
+    """
+    username = pending_deletion_request.username
+    # Ruling out the possibility of different types for mypy type checking.
+    assert isinstance(username, str)
+    fs = fs_services.GcsFileSystem(feconf.ENTITY_TYPE_USER, username)
+    filename_png = 'profile_picture.png'
+    filename_webp = 'profile_picture.webp'
+    if fs.isfile(filename_png):
+        fs.delete(filename_png)
+    else:
+        logging.error(
+            '%s Profile picture of username %s in .png format does not exists.'
+            % (WIPEOUT_LOGS_PREFIX, username)
+        )
+
+    if fs.isfile(filename_webp):
+        fs.delete(filename_webp)
+    else:
+        logging.error(
+            '%s Profile picture of username %s in .webp format does not '
+            'exists.' % (WIPEOUT_LOGS_PREFIX, username)
+        )
+
+
+def remove_user_from_user_groups(user_id: str) -> None:
+    """Removes the user from all user groups they are a member of.
+
+    Args:
+        user_id: str. The ID of the user to remove from user groups.
+    """
+    user_group_models: Sequence[user_models.UserGroupModel] = (
+        user_models.UserGroupModel.query(
+            user_models.UserGroupModel.user_ids == user_id).fetch()
+    )
+
+    @transaction_services.run_in_transaction_wrapper
+    def _remove_user_from_groups_transactional(
+        group_models: List[user_models.UserGroupModel]
+    ) -> None:
+        """Remove the user from a batch of user group models transactionally.
+
+        Args:
+            group_models: List[UserGroupModel]. The user group models to update.
+        """
+        for group_model in group_models:
+            if user_id in group_model.user_ids:
+                group_model.user_ids.remove(user_id)
+        user_models.UserGroupModel.update_timestamps_multi(group_models)
+        datastore_services.put_multi(group_models)
+
+    for i in range(
+        0,
+        len(user_group_models),
+        feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION
+    ):
+        batch = user_group_models[i:i + feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION]
+        _remove_user_from_groups_transactional(batch)
+
+
 def delete_user(
     pending_deletion_request: wipeout_domain.PendingDeletionRequest
 ) -> None:
@@ -395,12 +493,23 @@ def delete_user(
     _delete_models(user_id, models.Names.USER)
     _pseudonymize_config_models(pending_deletion_request)
     _delete_models(user_id, models.Names.FEEDBACK)
-    _delete_models(user_id, models.Names.IMPROVEMENTS)
     _delete_models(user_id, models.Names.SUGGESTION)
+    remove_user_from_user_groups(user_id)
     if feconf.ROLE_ID_MOBILE_LEARNER not in user_roles:
         remove_user_from_activities_with_associated_rights_models(
             pending_deletion_request.user_id)
-        _pseudonymize_app_feedback_report_models(pending_deletion_request)
+        _pseudonymize_one_model_class(
+            pending_deletion_request,
+            improvements_models.ExplorationStatsTaskEntryModel,
+            'resolver_id',
+            models.Names.IMPROVEMENTS
+        )
+        _pseudonymize_one_model_class(
+            pending_deletion_request,
+            app_feedback_report_models.AppFeedbackReportModel,
+            'scrubbed_by',
+            models.Names.APP_FEEDBACK_REPORT
+        )
         _pseudonymize_feedback_models(pending_deletion_request)
         _pseudonymize_activity_models_without_associated_rights_models(
             pending_deletion_request,
@@ -462,8 +571,38 @@ def delete_user(
             ['manager_ids'])
         _pseudonymize_blog_post_models(pending_deletion_request)
         _pseudonymize_version_history_models(pending_deletion_request)
+        _delete_profile_picture(pending_deletion_request)
     _delete_models(user_id, models.Names.EMAIL)
     _delete_models(user_id, models.Names.LEARNER_GROUP)
+
+
+def _verify_profile_picture_is_deleted(username: str) -> bool:
+    """Verify that the profile picture is deleted.
+
+    Args:
+        username: str. The username of the user.
+
+    Returns:
+        bool. True when the profile picture is deleted else False.
+    """
+    fs = fs_services.GcsFileSystem(feconf.ENTITY_TYPE_USER, username)
+    filename_png = 'profile_picture.png'
+    filename_webp = 'profile_picture.webp'
+    all_profile_images_deleted = True
+    if fs.isfile(filename_png):
+        logging.error(
+            '%s Profile picture in .png format is not deleted for user having '
+            'username %s.' % (WIPEOUT_LOGS_PREFIX, username)
+        )
+        all_profile_images_deleted = False
+    elif fs.isfile(filename_webp):
+        logging.error(
+            '%s Profile picture in .webp format is not deleted for user having '
+            'username %s.' % (WIPEOUT_LOGS_PREFIX, username)
+        )
+        all_profile_images_deleted = False
+
+    return all_profile_images_deleted
 
 
 def verify_user_deleted(
@@ -490,6 +629,14 @@ def verify_user_deleted(
     if not include_delete_at_end_models:
         policies_not_to_verify.append(
             base_models.DELETION_POLICY.DELETE_AT_END)
+
+        # Verify if user profile picture is deleted.
+        user_settings_model = user_models.UserSettingsModel.get_by_id(user_id)
+        username = user_settings_model.username
+        user_roles = user_settings_model.roles
+        if feconf.ROLE_ID_MOBILE_LEARNER not in user_roles:
+            if not _verify_profile_picture_is_deleted(username):
+                return False
 
     user_is_verified = True
     for model_class in models.Registry.get_all_storage_model_classes():
@@ -798,8 +945,7 @@ def _pseudonymize_config_models(
             request object for which to pseudonymize the models.
     """
     snapshot_model_classes = (
-        config_models.ConfigPropertySnapshotMetadataModel,
-        config_models.PlatformParameterSnapshotMetadataModel)
+        config_models.PlatformParameterSnapshotMetadataModel,)
 
     snapshot_metadata_models, _ = (
         _collect_and_save_entity_ids_from_snapshots_and_commits(
@@ -1213,39 +1359,46 @@ def _remove_user_id_from_contributors_in_summary_models(
                 i:i + feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION])
 
 
-def _pseudonymize_app_feedback_report_models(
-    pending_deletion_request: wipeout_domain.PendingDeletionRequest
+def _pseudonymize_one_model_class(
+    pending_deletion_request: wipeout_domain.PendingDeletionRequest,
+    model_class: Type[base_models.BaseModel],
+    name_of_property_containing_user_ids: str,
+    module_name: models.Names
 ) -> None:
-    """Pseudonymize the app feedback report models for the user with user_id,
-    if they scrubbed a feedback report. If the user scrubs multiple reports,
-    they will be given the same pseudonym for each model entity.
+    """Pseudonymize one model class for the user with the user_id associated
+    with the given pending deletion request.
 
     Args:
         pending_deletion_request: PendingDeletionRequest. The pending deletion
-            request object to be saved in the datastore.
+            request object.
+        model_class: class. The model class that contains the entity IDs.
+        name_of_property_containing_user_ids: str. The name of the property that
+            contains the user IDs. We fetch the models corresponding to the
+            user IDs stored in this property.
+        module_name: models.Names. The name of the module containing the models
+            that are being pseudonymized.
     """
-    model_class = app_feedback_report_models.AppFeedbackReportModel
     user_id = pending_deletion_request.user_id
 
-    feedback_report_models: Sequence[
-        app_feedback_report_models.AppFeedbackReportModel
-    ] = model_class.query(
-        model_class.scrubbed_by == user_id).fetch()
-    report_ids = set(model.id for model in feedback_report_models)
+    models_to_pseudonymize: Sequence[base_models.BaseModel] = model_class.query(
+        getattr(model_class, name_of_property_containing_user_ids) == user_id
+    ).fetch()
+    model_ids = set(model.id for model in models_to_pseudonymize)
 
     # Fill in any missing keys in the category's
     # pseudonymizable_entity_mappings, using the same pseudonym for each entity
     # so that a user will have the same pseudonymized ID for each entity
     # referencing them.
-    entity_category = models.Names.APP_FEEDBACK_REPORT
     _save_pseudonymizable_entity_mappings_to_same_pseudonym(
-        pending_deletion_request, entity_category, list(report_ids))
+        pending_deletion_request, module_name, list(model_ids))
+
+    report_ids_to_pids = (
+        pending_deletion_request.pseudonymizable_entity_mappings[
+            module_name.value])
 
     @transaction_services.run_in_transaction_wrapper
     def _pseudonymize_models_transactional(
-        feedback_report_models: List[
-            app_feedback_report_models.AppFeedbackReportModel
-        ]
+        models_to_pseudonymize: List[base_models.BaseModel]
     ) -> None:
         """Pseudonymize user ID fields in the models.
 
@@ -1253,24 +1406,23 @@ def _pseudonymize_app_feedback_report_models(
         feedback_report_models being MAX_NUMBER_OF_OPS_IN_TRANSACTION.
 
         Args:
-            feedback_report_models: list(FeedbackReportModel). The models with a
-                user ID in the 'scrubbed_by' field that we want to pseudonymize.
+            models_to_pseudonymize: list(BaseModel). The models that we want
+                to pseudonymize.
         """
-        for report_model in feedback_report_models:
-            report_model.scrubbed_by = (
-                report_ids_to_pids[report_model.id])
-        model_class.update_timestamps_multi(feedback_report_models)
-        model_class.put_multi(feedback_report_models)
-
-    report_ids_to_pids = (
-        pending_deletion_request.pseudonymizable_entity_mappings[
-            models.Names.APP_FEEDBACK_REPORT.value])
+        for model in models_to_pseudonymize:
+            setattr(
+                model,
+                name_of_property_containing_user_ids,
+                report_ids_to_pids[model.id]
+            )
+        model_class.update_timestamps_multi(models_to_pseudonymize)
+        model_class.put_multi(models_to_pseudonymize)
 
     for i in range(
-            0, len(feedback_report_models),
-            feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION):
+        0, len(models_to_pseudonymize), feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION
+    ):
         _pseudonymize_models_transactional(
-            feedback_report_models[
+            models_to_pseudonymize[
                 i:i + feconf.MAX_NUMBER_OF_OPS_IN_TRANSACTION])
 
 

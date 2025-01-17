@@ -19,25 +19,26 @@
  *     somewhere in the HTML page.
  */
 
-import { EventEmitter, Injectable } from '@angular/core';
-import { downgradeInjectable } from '@angular/upgrade/static';
+import {EventEmitter, Injectable} from '@angular/core';
+import {downgradeInjectable} from '@angular/upgrade/static';
 
-import { AppConstants } from 'app.constants';
-import { IdGenerationService } from 'services/id-generation.service';
-import { DeviceInfoService } from 'services/contextual/device-info.service';
-import { WindowRef } from 'services/contextual/window-ref.service';
+import {AppConstants} from 'app.constants';
+import {IdGenerationService} from 'services/id-generation.service';
+import {DeviceInfoService} from 'services/contextual/device-info.service';
+import {WindowRef} from 'services/contextual/window-ref.service';
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class FocusManagerService {
   // This property can be undefined but not null because we need to emit it.
   private nextLabelToFocusOn: string | undefined;
   private focusEventEmitter: EventEmitter<string> = new EventEmitter();
+  private _schemaBasedListEditorIsActive: boolean = false;
 
   constructor(
-      private deviceInfoService: DeviceInfoService,
-      private idGenerationService: IdGenerationService,
-      private windowRef: WindowRef = new WindowRef(),
+    private deviceInfoService: DeviceInfoService,
+    private idGenerationService: IdGenerationService,
+    private windowRef: WindowRef = new WindowRef()
   ) {}
 
   clearFocus(): void {
@@ -64,11 +65,19 @@ export class FocusManagerService {
     return this.idGenerationService.generateNewId();
   }
 
+  set schemaBasedListEditorIsActive(listEditorIsActive: boolean) {
+    this._schemaBasedListEditorIsActive = listEditorIsActive;
+  }
+
   setFocusWithoutScroll(name: string): void {
     this.setFocus(name);
-    setTimeout(() => {
-      this.windowRef.nativeWindow.scrollTo(0, 0);
-    }, 5);
+    // We do not want to scroll back to top of the page when schema based list
+    // editor is being used due to autofocus in subsequent input fields.
+    if (!this._schemaBasedListEditorIsActive) {
+      setTimeout(() => {
+        this.windowRef.nativeWindow.scrollTo(0, 0);
+      }, 5);
+    }
   }
 
   get onFocus(): EventEmitter<string> {
@@ -76,5 +85,6 @@ export class FocusManagerService {
   }
 }
 
-angular.module('oppia').factory(
-  'FocusManagerService', downgradeInjectable(FocusManagerService));
+angular
+  .module('oppia')
+  .factory('FocusManagerService', downgradeInjectable(FocusManagerService));

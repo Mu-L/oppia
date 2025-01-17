@@ -21,6 +21,7 @@ from __future__ import annotations
 from core.constants import constants
 from core.domain import auth_domain
 from core.domain import auth_services
+from core.domain import caching_services
 from core.domain import user_domain
 from core.domain import user_services
 from core.platform import models
@@ -29,10 +30,14 @@ from core.tests import test_utils
 import webapp2
 
 MYPY = False
-if MYPY: # pragma: no cover
+if MYPY:  # pragma: no cover
     from mypy_imports import auth_models
+    from mypy_imports import platform_auth_services
 
-auth_models, = models.Registry.import_models([models.Names.AUTH])
+auth_models, = (
+    models.Registry.import_models([models.Names.AUTH]))
+
+platform_auth_services = models.Registry.import_auth_services()
 
 
 class AuthServicesTests(test_utils.GenericTestBase):
@@ -231,3 +236,118 @@ class AuthServicesTests(test_utils.GenericTestBase):
     def test_delete_association_when_it_is_missing_does_not_raise(self) -> None:
         # Should not raise.
         auth_services.delete_external_auth_associations('does_not_exist')
+
+    def test_auth_session_established_or_destoryed(self) -> None:
+        auth_section = []
+        def mock_establish_auth_session(
+            _: webapp2.Request,
+            __: webapp2.Response
+        ) -> None:
+            auth_section.append('established')
+
+        def mock_destroy_auth_session(
+            _: webapp2.Response
+        ) -> None:
+            auth_section.remove('established')
+
+        with self.swap(
+            platform_auth_services,
+            'establish_auth_session',
+            mock_establish_auth_session
+        ):
+            auth_services.establish_auth_session(
+                webapp2.Request.blank('/'),
+                webapp2.Response()
+            )
+            self.assertEqual(['established'], auth_section)
+        with self.swap(
+            platform_auth_services,
+            'destroy_auth_session',
+            mock_destroy_auth_session
+        ):
+            auth_services.destroy_auth_session(webapp2.Response())
+            self.assertEqual([], auth_section)
+
+    def test_super_admin_granted_or_revoked(self) -> None:
+        super_admin_privilage = []
+        def mock_grant_super_admin_privileges(uid: str) -> None:
+            super_admin_privilage.append(uid)
+
+        def mock_revoke_super_admin_privileges(uid: str) -> None:
+            super_admin_privilage.remove(uid)
+
+        with self.swap(
+            platform_auth_services,
+            'grant_super_admin_privileges',
+            mock_grant_super_admin_privileges
+        ):
+            auth_services.grant_super_admin_privileges('uid1')
+            self.assertEqual(['uid1'], super_admin_privilage)
+        with self.swap(
+            platform_auth_services,
+            'revoke_super_admin_privileges',
+            mock_revoke_super_admin_privileges
+        ):
+            auth_services.revoke_super_admin_privileges('uid1')
+            self.assertEqual([], super_admin_privilage)
+
+    def test_get_csrf_secret_value_returns_when_no_models(self) -> None:
+        csrf_secret_model = auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False)
+        if csrf_secret_model is not None:
+            auth_models.CsrfSecretModel.delete(csrf_secret_model)
+            caching_services.delete_multi(
+                caching_services.CACHE_NAMESPACE_DEFAULT,
+                None,
+                [auth_services.CSRF_SECRET_INSTANCE_ID]
+            )
+        self.assertIsNone(auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False))
+
+        actual_csrf_secret_value = auth_services.get_csrf_secret_value()
+
+        expected_csrf_secret = auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False
+        )
+        self.assertIsNotNone(expected_csrf_secret)
+        # Ruling out the possibility of csrf_secret_model being None in
+        # order to avoid mypy error.
+        assert expected_csrf_secret is not None
+        self.assertEqual(
+            expected_csrf_secret.oppia_csrf_secret, actual_csrf_secret_value)
+
+    def test_csrf_secret_mode_is_initialized_correctly(self) -> None:
+        self.assertIsNotNone(auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False))
+
+        actual_csrf_secret_value = auth_services.get_csrf_secret_value()
+
+        expected_csrf_secret = auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False
+        )
+        # Ruling out the possibility of csrf_secret_model being None in
+        # order to avoid mypy error.
+        assert expected_csrf_secret is not None
+        self.assertEqual(
+            expected_csrf_secret.oppia_csrf_secret, actual_csrf_secret_value)
+
+    def test_get_csrf_secret_from_model_when_not_in_cache(self) -> None:
+        self.assertIsNotNone(auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False))
+        caching_services.delete_multi(
+            caching_services.CACHE_NAMESPACE_DEFAULT,
+            None,
+            [auth_services.CSRF_SECRET_INSTANCE_ID]
+        )
+
+        actual_csrf_secret_value = auth_services.get_csrf_secret_value()
+
+        expected_csrf_secret = auth_models.CsrfSecretModel.get(
+            auth_services.CSRF_SECRET_INSTANCE_ID, strict=False
+        )
+        # Ruling out the possibility of csrf_secret_model being None in
+        # order to avoid mypy error.
+        assert expected_csrf_secret is not None
+        self.assertEqual(
+            expected_csrf_secret.oppia_csrf_secret, actual_csrf_secret_value
+        )

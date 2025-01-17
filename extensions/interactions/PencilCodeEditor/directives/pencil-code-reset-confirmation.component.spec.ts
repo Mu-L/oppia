@@ -16,11 +16,11 @@
  * @fileoverview Unit tests for Pencil Code Reset Confirmation Modal.
  */
 
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MockTranslatePipe } from 'tests/unit-test-utils';
-import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { PencilCodeResetConfirmation } from './pencil-code-reset-confirmation.component';
+import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {MockTranslatePipe} from 'tests/unit-test-utils';
+import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
+import {NO_ERRORS_SCHEMA} from '@angular/core';
+import {PencilCodeResetConfirmation} from './pencil-code-reset-confirmation.component';
 
 class MockActiveModal {
   dismiss(): void {
@@ -40,17 +40,14 @@ describe('Pencil Code Reset Confirmation Modal', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [],
-      declarations: [
-        PencilCodeResetConfirmation,
-        MockTranslatePipe
-      ],
+      declarations: [PencilCodeResetConfirmation, MockTranslatePipe],
       providers: [
         {
           provide: NgbActiveModal,
-          useClass: MockActiveModal
-        }
+          useClass: MockActiveModal,
+        },
       ],
-      schemas: [NO_ERRORS_SCHEMA]
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
   });
 
@@ -62,7 +59,7 @@ describe('Pencil Code Reset Confirmation Modal', () => {
 
   it('should close the modal when confirmed', () => {
     const closeSpy = spyOn(ngbActiveModal, 'close').and.callThrough();
-    component.confirm('some value');
+    component.confirm();
     expect(closeSpy).toHaveBeenCalled();
   });
 

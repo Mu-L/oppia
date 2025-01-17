@@ -20,14 +20,15 @@ from __future__ import annotations
 
 import datetime
 
+from core import feature_flag_list
 from core import feconf
 from core import utils
 from core.constants import constants
 from core.controllers import improvements
-from core.domain import config_domain
 from core.domain import exp_services
 from core.domain import improvements_domain
 from core.domain import improvements_services
+from core.domain import platform_parameter_list
 from core.platform import models
 from core.tests import test_utils
 
@@ -306,16 +307,19 @@ class ExplorationImprovementsHandlerTests(ImprovementsTestBase):
                 }]
             }, csrf_token=self.get_new_csrf_token())
 
-        task_entry_model = improvements_models.TaskEntryModel.get_by_id(
-            improvements_models.TaskEntryModel.generate_task_id(
+        task_id = (
+            improvements_models.ExplorationStatsTaskEntryModel.generate_task_id(
                 constants.TASK_ENTITY_TYPE_EXPLORATION,
                 self.exp.id,
                 self.exp.version,
                 constants.TASK_TYPE_HIGH_BOUNCE_RATE,
                 constants.TASK_TARGET_TYPE_STATE,
-                feconf.DEFAULT_INIT_STATE_NAME))
+                feconf.DEFAULT_INIT_STATE_NAME
+            )
+        )
+        task_entry_model = (
+            improvements_models.ExplorationStatsTaskEntryModel.get(task_id))
 
-        self.assertIsNotNone(task_entry_model)
         self.assertIsNone(task_entry_model.issue_description)
 
     def test_post_with_missing_status_returns_401_error(self) -> None:
@@ -342,16 +346,19 @@ class ExplorationImprovementsHandlerTests(ImprovementsTestBase):
                 }]
             }, csrf_token=self.get_new_csrf_token())
 
-        task_id = improvements_models.TaskEntryModel.generate_task_id(
-            constants.TASK_ENTITY_TYPE_EXPLORATION,
-            self.exp.id,
-            self.exp.version,
-            constants.TASK_TYPE_HIGH_BOUNCE_RATE,
-            constants.TASK_TARGET_TYPE_STATE,
-            feconf.DEFAULT_INIT_STATE_NAME)
-        task_entry_model = improvements_models.TaskEntryModel.get_by_id(task_id)
+        task_id = (
+            improvements_models.ExplorationStatsTaskEntryModel.generate_task_id(
+                constants.TASK_ENTITY_TYPE_EXPLORATION,
+                self.exp.id,
+                self.exp.version,
+                constants.TASK_TYPE_HIGH_BOUNCE_RATE,
+                constants.TASK_TARGET_TYPE_STATE,
+                feconf.DEFAULT_INIT_STATE_NAME
+            )
+        )
+        task_entry_model = (
+            improvements_models.ExplorationStatsTaskEntryModel.get(task_id))
 
-        self.assertIsNotNone(task_entry_model)
         self.assertEqual(task_entry_model.id, task_id)
         self.assertEqual(
             task_entry_model.entity_type,
@@ -385,16 +392,19 @@ class ExplorationImprovementsHandlerTests(ImprovementsTestBase):
                 }]
             }, csrf_token=self.get_new_csrf_token())
 
-        task_id = improvements_models.TaskEntryModel.generate_task_id(
-            constants.TASK_ENTITY_TYPE_EXPLORATION,
-            self.exp.id,
-            self.exp.version,
-            constants.TASK_TYPE_HIGH_BOUNCE_RATE,
-            constants.TASK_TARGET_TYPE_STATE,
-            feconf.DEFAULT_INIT_STATE_NAME)
-        task_entry_model = improvements_models.TaskEntryModel.get_by_id(task_id)
+        task_id = (
+            improvements_models.ExplorationStatsTaskEntryModel.generate_task_id(
+                constants.TASK_ENTITY_TYPE_EXPLORATION,
+                self.exp.id,
+                self.exp.version,
+                constants.TASK_TYPE_HIGH_BOUNCE_RATE,
+                constants.TASK_TARGET_TYPE_STATE,
+                feconf.DEFAULT_INIT_STATE_NAME
+            )
+        )
+        task_entry_model = (
+            improvements_models.ExplorationStatsTaskEntryModel.get(task_id))
 
-        self.assertIsNotNone(task_entry_model)
         self.assertEqual(task_entry_model.id, task_id)
         self.assertEqual(
             task_entry_model.entity_type,
@@ -432,16 +442,19 @@ class ExplorationImprovementsHandlerTests(ImprovementsTestBase):
                 }]
             }, csrf_token=self.get_new_csrf_token())
 
-        task_id = improvements_models.TaskEntryModel.generate_task_id(
-            constants.TASK_ENTITY_TYPE_EXPLORATION,
-            self.exp.id,
-            self.exp.version,
-            constants.TASK_TYPE_HIGH_BOUNCE_RATE,
-            constants.TASK_TARGET_TYPE_STATE,
-            feconf.DEFAULT_INIT_STATE_NAME)
-        task_entry_model = improvements_models.TaskEntryModel.get_by_id(task_id)
+        task_id = (
+            improvements_models.ExplorationStatsTaskEntryModel.generate_task_id(
+                constants.TASK_ENTITY_TYPE_EXPLORATION,
+                self.exp.id,
+                self.exp.version,
+                constants.TASK_TYPE_HIGH_BOUNCE_RATE,
+                constants.TASK_TARGET_TYPE_STATE,
+                feconf.DEFAULT_INIT_STATE_NAME
+            )
+        )
+        task_entry_model = (
+            improvements_models.ExplorationStatsTaskEntryModel.get(task_id))
 
-        self.assertIsNotNone(task_entry_model)
         self.assertEqual(task_entry_model.id, task_id)
         self.assertEqual(
             task_entry_model.entity_type,
@@ -502,7 +515,6 @@ class ExplorationImprovementsHandlerTests(ImprovementsTestBase):
             'issue_description': 'issue description',
             'status': 'resolved',
             'resolver_username': None,
-            'resolver_profile_picture_data_url': None,
             'resolved_on_msecs': utils.get_time_in_millisecs(self.MOCK_DATE),
         })
 
@@ -651,9 +663,6 @@ class ExplorationImprovementsConfigHandlerTests(test_utils.GenericTestBase):
                 self.get_url(exp_id='bad_exp_id'), expected_status_int=404)
 
     def test_get_returns_exploration_id(self) -> None:
-        self.set_config_property(
-            config_domain.IS_IMPROVEMENTS_TAB_ENABLED, False)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 
@@ -679,28 +688,27 @@ class ExplorationImprovementsConfigHandlerTests(test_utils.GenericTestBase):
         self.assertEqual(json_response['exploration_version'], 2)
 
     def test_improvements_tab_disabled(self) -> None:
-        self.set_config_property(
-            config_domain.IS_IMPROVEMENTS_TAB_ENABLED, False)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 
         self.assertFalse(json_response['is_improvements_tab_enabled'])
 
+    @test_utils.enable_feature_flags(
+        [feature_flag_list.FeatureNames.IS_IMPROVEMENTS_TAB_ENABLED])
     def test_improvements_tab_enabled(self) -> None:
-        self.set_config_property(
-            config_domain.IS_IMPROVEMENTS_TAB_ENABLED, True)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 
         self.assertTrue(json_response['is_improvements_tab_enabled'])
 
+    @test_utils.set_platform_parameters(
+        [
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_CREATION_THRESHOLD, 0.35),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_OBSOLETION_THRESHOLD, 0),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_MINIMUM_EXPLORATION_STARTS, 0) # pylint: disable=line-too-long
+        ]
+    )
     def test_custom_high_bounce_rate_creation_threshold(self) -> None:
-        self.set_config_property((
-            config_domain
-            .HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_CREATION_THRESHOLD), 0.35)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 
@@ -709,13 +717,14 @@ class ExplorationImprovementsConfigHandlerTests(test_utils.GenericTestBase):
                 'high_bounce_rate_task_state_bounce_rate_creation_threshold'],
             0.35)
 
+    @test_utils.set_platform_parameters(
+        [
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_CREATION_THRESHOLD, 0),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_OBSOLETION_THRESHOLD, 0.05),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_MINIMUM_EXPLORATION_STARTS, 0) # pylint: disable=line-too-long
+        ]
+    )
     def test_custom_high_bounce_rate_obsoletion_threshold(self) -> None:
-        self.set_config_property(
-            (
-                config_domain
-                .HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_OBSOLETION_THRESHOLD),
-            0.05)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 
@@ -724,13 +733,16 @@ class ExplorationImprovementsConfigHandlerTests(test_utils.GenericTestBase):
                 'high_bounce_rate_task_state_bounce_rate_obsoletion_threshold'],
             0.05)
 
+    @test_utils.set_platform_parameters(
+        [
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_CREATION_THRESHOLD, 0),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_STATE_BOUNCE_RATE_OBSOLETION_THRESHOLD, 0),  # pylint: disable=line-too-long
+            (platform_parameter_list.ParamName.HIGH_BOUNCE_RATE_TASK_MINIMUM_EXPLORATION_STARTS, 20) # pylint: disable=line-too-long
+        ]
+    )
     def test_custom_high_bounce_rate_task_minimum_exploration_starts(
         self
     ) -> None:
-        self.set_config_property(
-            config_domain.HIGH_BOUNCE_RATE_TASK_MINIMUM_EXPLORATION_STARTS,
-            20)
-
         with self.login_context(self.OWNER_EMAIL):
             json_response = self.get_json(self.get_url())
 

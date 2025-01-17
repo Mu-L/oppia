@@ -54,7 +54,32 @@ class ConstantsTests(test_utils.GenericTestBase):
                 FileNotFoundError,
                 'No such file or directory: \'assets/non_exist.xy\''
             ):
-                constants.get_package_file_contents('assets', 'non_exist.xy')
+                constants.get_package_file_contents(
+                    'assets', 'non_exist.xy', binary_mode=False)
+
+    def test_loading_binary_file_in_package_returns_the_content(self) -> None:
+        """Test get_package_file_contents with imaginary binary file."""
+        with self.swap_to_always_return(pkgutil, 'get_data', 'File data'):
+            self.assertEqual(
+                constants.get_package_file_contents(
+                    'assets', 'non_exist.xy', binary_mode=True), 'File data'
+            )
+
+    def test_loading_binary_file_returns_the_content(self) -> None:
+        """Test get_package_file_contents with binary file."""
+        with utils.open_file(
+            os.path.join(
+                'assets', 'images', 'avatar', 'user_blue_150px.png'),
+            'rb',
+            encoding=None
+        ) as f:
+            raw_image_png = f.read()
+        default_image_path = os.path.join(
+            'images', 'avatar', 'user_blue_150px.png')
+        self.assertEqual(
+            constants.get_package_file_contents(
+                'assets', default_image_path, binary_mode=True), raw_image_png
+        )
 
     def test_loading_file_in_package_returns_the_content(self) -> None:
         """Test get_package_file_contents with imaginary file."""
@@ -72,6 +97,8 @@ class ConstantsTests(test_utils.GenericTestBase):
                 'No such file or directory: \'assets/non_exist.xy\''
             ):
                 constants.get_package_file_contents('assets', 'non_exist.xy')
+                constants.get_package_file_contents(
+                    'assets', 'non_exist.xy', binary_mode=True)
 
     def test_difficulty_values_are_matched(self) -> None:
         """Tests that the difficulty values and strings are matched in the
@@ -126,28 +153,28 @@ class ConstantsTests(test_utils.GenericTestBase):
         """
         # TODO(#11737): Remove this once language constants are consolidated.
         rtl_content_languages = [
-            language[u'code']
+            language['code']
             for language
             in constants.constants.SUPPORTED_CONTENT_LANGUAGES
-            if language[u'direction'] == 'rtl'
+            if language['direction'] == 'rtl'
         ]
         ltr_content_languages = [
-            language[u'code']
+            language['code']
             for language
             in constants.constants.SUPPORTED_CONTENT_LANGUAGES
-            if language[u'direction'] == 'ltr'
+            if language['direction'] == 'ltr'
         ]
         rtl_audio_languages = [
-            language[u'id']
+            language['id']
             for language
             in constants.constants.SUPPORTED_AUDIO_LANGUAGES
-            if language[u'direction'] == 'rtl'
+            if language['direction'] == 'rtl'
         ]
         ltr_audio_languages = [
-            language[u'id']
+            language['id']
             for language
             in constants.constants.SUPPORTED_AUDIO_LANGUAGES
-            if language[u'direction'] == 'ltr'
+            if language['direction'] == 'ltr'
         ]
         conflicts = list(
             set(rtl_content_languages) & set(ltr_audio_languages)

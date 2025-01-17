@@ -16,142 +16,65 @@
  * @fileoverview Module for the edit learner group page.
  */
 
-import { APP_INITIALIZER, NgModule, StaticProvider } from '@angular/core';
-import { BrowserModule, HAMMER_GESTURE_CONFIG } from
-  '@angular/platform-browser';
-import { downgradeComponent } from '@angular/upgrade/static';
-import { HttpClientModule } from '@angular/common/http';
-import { HTTP_INTERCEPTORS } from '@angular/common/http';
-import { RequestInterceptor } from 'services/request-interceptor.service';
-import { SharedComponentsModule } from 'components/shared-component.module';
-import { RouterModule } from '@angular/router';
-import { APP_BASE_HREF } from '@angular/common';
+import {NgModule} from '@angular/core';
+import {SharedComponentsModule} from 'components/shared-component.module';
+import {ToastrModule} from 'ngx-toastr';
+import {toastrConfig} from 'pages/oppia-root/app.module';
+import {RouterModule} from '@angular/router';
+import {CommonModule} from '@angular/common';
 
-import { EditLearnerGroupPageComponent } from
-  './edit-learner-group-page.component';
-import { LearnerGroupOverviewComponent } from
-  './learner-group-overview.component';
-import { LearnerGroupSyllabusComponent } from
-  './learner-group-syllabus.component';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { MyHammerConfig, toastrConfig } from 'pages/oppia-root/app.module';
-import { AddSyllabusItemsComponent } from
-  '../create-group/add-syllabus-items.component';
-import { RemoveItemModalComponent } from
-  '../templates/remove-item-modal.component';
-import { SyllabusAdditionSuccessModalComponent } from
-  '../templates/syllabus-addition-success-modal.component';
-import { LearnerGroupPreferencesComponent } from
-  './learner-group-preferences.component';
-import { LearnerGroupDetailsComponent } from
-  '../create-group/learner-group-details.component';
-import { InviteLearnersModalComponent } from
-  '../templates/invite-learners-modal.component';
-import { InviteLearnersComponent } from
-  '../create-group/invite-learners.component';
-import { LearnerGroupLearnersProgressComponent } from
-  './learner-group-learners-progress.component';
-import { LearnerGroupLearnerSpecificProgressComponent } from
-  './learner-group-learner-specific-progress.component';
-import { InviteSuccessfulModalComponent } from
-  '../templates/invite-successful-modal.component';
-import { DeleteLearnerGroupModalComponent } from
-  '../templates/delete-learner-group-modal.component';
+import {EditLearnerGroupPageAuthGuard} from './edit-learner-group-page-auth.guard';
+import {EditLearnerGroupPageRootComponent} from './edit-learner-group-page-root.component';
+import {EditLearnerGroupPageComponent} from './edit-learner-group-page.component';
+import {LearnerGroupSyllabusComponent} from './learner-group-syllabus.component';
+
+import {RemoveItemModalComponent} from '../templates/remove-item-modal.component';
+import {SyllabusAdditionSuccessModalComponent} from '../templates/syllabus-addition-success-modal.component';
+import {LearnerGroupPreferencesComponent} from './learner-group-preferences.component';
+
+import {InviteLearnersModalComponent} from '../templates/invite-learners-modal.component';
+
+import {LearnerGroupLearnersProgressComponent} from './learner-group-learners-progress.component';
+import {InviteSuccessfulModalComponent} from '../templates/invite-successful-modal.component';
+import {DeleteLearnerGroupModalComponent} from '../templates/delete-learner-group-modal.component';
+import {SharedLearnerGroupComponentsModule} from 'pages/learner-group-pages/shared-learner-group-component.module';
 
 @NgModule({
   imports: [
-    BrowserModule,
-    BrowserAnimationsModule,
-    HttpClientModule,
-    // TODO(#13443): Remove smart router module provider once all pages are
-    // migrated to angular router.
-    SmartRouterModule,
-    RouterModule.forRoot([]),
     SharedComponentsModule,
-    ToastrModule.forRoot(toastrConfig)
+    CommonModule,
+    SharedLearnerGroupComponentsModule,
+    ToastrModule.forRoot(toastrConfig),
+    RouterModule.forChild([
+      {
+        path: '',
+        component: EditLearnerGroupPageRootComponent,
+        canActivate: [EditLearnerGroupPageAuthGuard],
+      },
+    ]),
   ],
   declarations: [
+    EditLearnerGroupPageRootComponent,
     EditLearnerGroupPageComponent,
-    LearnerGroupOverviewComponent,
     LearnerGroupSyllabusComponent,
     LearnerGroupLearnersProgressComponent,
     LearnerGroupPreferencesComponent,
-    LearnerGroupLearnerSpecificProgressComponent,
-    AddSyllabusItemsComponent,
-    InviteLearnersComponent,
-    LearnerGroupDetailsComponent,
     RemoveItemModalComponent,
     SyllabusAdditionSuccessModalComponent,
     InviteLearnersModalComponent,
     InviteSuccessfulModalComponent,
-    DeleteLearnerGroupModalComponent
+    DeleteLearnerGroupModalComponent,
   ],
   entryComponents: [
     EditLearnerGroupPageComponent,
-    LearnerGroupOverviewComponent,
     LearnerGroupSyllabusComponent,
     LearnerGroupLearnersProgressComponent,
     LearnerGroupPreferencesComponent,
-    LearnerGroupLearnerSpecificProgressComponent,
-    AddSyllabusItemsComponent,
-    InviteLearnersComponent,
-    LearnerGroupDetailsComponent,
     RemoveItemModalComponent,
     SyllabusAdditionSuccessModalComponent,
     InviteLearnersModalComponent,
     InviteSuccessfulModalComponent,
-    DeleteLearnerGroupModalComponent
+    DeleteLearnerGroupModalComponent,
   ],
-  providers: [
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: RequestInterceptor,
-      multi: true
-    },
-    {
-      provide: APP_INITIALIZER,
-      useFactory: platformFeatureInitFactory,
-      deps: [PlatformFeatureService],
-      multi: true
-    },
-    {
-      provide: HAMMER_GESTURE_CONFIG,
-      useClass: MyHammerConfig
-    },
-    {
-      provide: APP_BASE_HREF,
-      useValue: '/'
-    }
-  ]
 })
-class EditLearnerGroupPageModule {
-  // Empty placeholder method to satisfy the `Compiler`.
-  ngDoBootstrap() {}
-}
-
-import { platformFeatureInitFactory, PlatformFeatureService } from
-  'services/platform-feature.service';
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { downgradeModule } from '@angular/upgrade/static';
-import { ToastrModule } from 'ngx-toastr';
-import { SmartRouterModule } from 'hybrid-router-module-provider';
-import { OppiaAngularRootComponent } from
-  'components/oppia-angular-root.component';
-
-const bootstrapFnAsync = async(extraProviders: StaticProvider[]) => {
-  const platformRef = platformBrowserDynamic(extraProviders);
-  return platformRef.bootstrapModule(EditLearnerGroupPageModule);
-};
-const downgradedModule = downgradeModule(bootstrapFnAsync);
-
-declare var angular: ng.IAngularStatic;
-
-angular.module('oppia').requires.push(downgradedModule);
-
-angular.module('oppia').directive(
-  // This directive is the downgraded version of the Angular component to
-  // bootstrap the Angular 8.
-  'oppiaAngularRoot',
-  downgradeComponent({
-    component: OppiaAngularRootComponent
-  }) as angular.IDirectiveFactory);
+export class EditLearnerGroupPageModule {}
