@@ -16,22 +16,22 @@
  * @fileoverview Module for the blog home page.
  */
 
-import { NgModule } from '@angular/core';
-import { SharedComponentsModule } from 'components/shared-component.module';
-import { InfiniteScrollModule } from 'ngx-infinite-scroll';
-import { FormsModule } from '@angular/forms';
-import { ReactiveFormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
-import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
+import {NgModule} from '@angular/core';
+import {SharedComponentsModule} from 'components/shared-component.module';
+import {InfiniteScrollModule} from 'ngx-infinite-scroll';
+import {FormsModule} from '@angular/forms';
+import {ReactiveFormsModule} from '@angular/forms';
+import {TranslateModule} from '@ngx-translate/core';
+import {NgbModule} from '@ng-bootstrap/ng-bootstrap';
 
-import { BlogHomePageRootComponent } from './blog-home-page-root.component';
-import { BlogHomePageComponent } from './blog-home-page.component';
-import { CommonModule } from '@angular/common';
-import { BlogHomePageRoutingModule } from './blog-home-page-routing.module';
-import { BlogCardComponent } from 'pages/blog-dashboard-page/blog-card/blog-card.component';
-import { TagFilterComponent } from './tag-filter/tag-filter.component';
-import { StringUtilityPipesModule } from 'filters/string-utility-filters/string-utility-pipes.module';
-import { Error404PageModule } from 'pages/error-pages/error-404/error-404-page.module';
+import {BlogHomePageRootComponent} from './blog-home-page-root.component';
+import {BlogHomePageComponent} from './blog-home-page.component';
+import {CommonModule} from '@angular/common';
+import {BlogHomePageRoutingModule} from './blog-home-page-routing.module';
+import {TagFilterComponent} from './tag-filter/tag-filter.component';
+import {StringUtilityPipesModule} from 'filters/string-utility-filters/string-utility-pipes.module';
+import {Error404PageModule} from 'pages/error-pages/error-404/error-404-page.module';
+import {SharedBlogComponentsModule} from 'pages/blog-dashboard-page/shared-blog-components.module';
 
 @NgModule({
   imports: [
@@ -44,19 +44,18 @@ import { Error404PageModule } from 'pages/error-pages/error-404/error-404-page.m
     StringUtilityPipesModule,
     TranslateModule,
     ReactiveFormsModule,
-    Error404PageModule
+    SharedBlogComponentsModule,
+    Error404PageModule,
   ],
   declarations: [
     BlogHomePageComponent,
     BlogHomePageRootComponent,
-    BlogCardComponent,
-    TagFilterComponent
+    TagFilterComponent,
   ],
   entryComponents: [
     BlogHomePageComponent,
     BlogHomePageRootComponent,
-    BlogCardComponent,
-    TagFilterComponent
-  ]
+    TagFilterComponent,
+  ],
 })
 export class BlogHomePageModule {}

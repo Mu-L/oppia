@@ -31,158 +31,7 @@ from . import pylint_extensions
 import astroid  # isort:skip
 from pylint import interfaces  # isort:skip
 from pylint import testutils  # isort:skip
-from pylint import lint  # isort:skip
 from pylint import utils as pylint_utils  # isort:skip
-
-
-class ExplicitKeywordArgsCheckerTests(unittest.TestCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.checker_test_object = testutils.CheckerTestCase()
-        self.checker_test_object.CHECKER_CLASS = (
-            pylint_extensions.ExplicitKeywordArgsChecker)
-        self.checker_test_object.setup_method()
-
-    def test_finds_non_explicit_keyword_args(self) -> None:
-        (
-            func_call_node_one, func_call_node_two, func_call_node_three,
-            func_call_node_four, func_call_node_five, class_call_node
-        ) = astroid.extract_node(
-                """
-        class TestClass():
-            pass
-
-        def test(test_var_one, test_var_two=4, test_var_three=5,
-                test_var_four="test_checker"):
-            test_var_five = test_var_two + test_var_three
-            return test_var_five
-
-        def test_1(test_var_one, test_var_one):
-            pass
-
-        test(2, 5, test_var_three=6) #@
-        test(2) #@
-        test(2, 6, test_var_two=5, test_var_four="test_checker") #@
-        max(5, 1) #@
-        test_1(1, 2) #@
-
-        TestClass() #@
-        """)
-        with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
-                msg_id='non-explicit-keyword-args',
-                node=func_call_node_one,
-                args=(
-                    '\'test_var_two\'',
-                    'function',
-                    'test'
-                )
-            ),
-        ):
-            self.checker_test_object.checker.visit_call(
-                func_call_node_one)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(
-                func_call_node_two)
-
-        with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
-                msg_id='non-explicit-keyword-args',
-                node=func_call_node_three,
-                args=(
-                    '\'test_var_three\'',
-                    'function',
-                    'test'
-                )
-            )
-        ):
-            self.checker_test_object.checker.visit_call(
-                func_call_node_three)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(class_call_node)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(func_call_node_four)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(func_call_node_five)
-
-    def test_finds_arg_name_for_non_keyword_arg(self) -> None:
-        node_arg_name_for_non_keyword_arg = astroid.extract_node(
-            """
-            def test(test_var_one, test_var_two=4, test_var_three=5):
-                test_var_five = test_var_two + test_var_three
-                return test_var_five
-
-            test(test_var_one=2, test_var_two=5) #@
-            """)
-        message = testutils.Message(
-            msg_id='arg-name-for-non-keyword-arg',
-            node=node_arg_name_for_non_keyword_arg,
-            args=('\'test_var_one\'', 'function', 'test'))
-        with self.checker_test_object.assertAddsMessages(message):
-            self.checker_test_object.checker.visit_call(
-                node_arg_name_for_non_keyword_arg)
-
-    def test_correct_use_of_keyword_args(self) -> None:
-        node_with_no_error_message = astroid.extract_node(
-            """
-            def test(test_var_one, test_var_two=4, test_var_three=5):
-                test_var_five = test_var_two + test_var_three
-                return test_var_five
-
-            test(2, test_var_two=2) #@
-            """)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(
-                node_with_no_error_message)
-
-    def test_function_with_args_and_kwargs(self) -> None:
-        node_with_args_and_kwargs = astroid.extract_node(
-            """
-            def test_1(*args, **kwargs):
-                pass
-
-            test_1(first=1, second=2) #@
-            """)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(
-                node_with_args_and_kwargs)
-
-    def test_constructor_call_with_keyword_arguments(self) -> None:
-        node_with_no_error_message = astroid.extract_node(
-            """
-            class TestClass():
-                def __init__(self, first, second):
-                    pass
-
-            TestClass(first=1, second=2) #@
-            """)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(
-                node_with_no_error_message)
-
-    def test_checker_skips_object_call_when_noncallable_object_is_called(
-        self
-    ) -> None:
-        node_with_no_error_message = astroid.extract_node(
-            """
-            1() #@
-            """)
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_call(
-                node_with_no_error_message)
-
-    def test_register(self) -> None:
-        pylinter_instance = lint.PyLinter()
-        pylint_extensions.register(pylinter_instance)
 
 
 class HangingIndentCheckerTests(unittest.TestCase):
@@ -202,7 +51,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""self.post_json('/ml/\\trainedclassifierhandler',
+                """self.post_json('/some/\\url',
                 self.payload, expect_errors=True, expected_status_int=401)
                 if (a > 1 and
                         b > 2):
@@ -213,7 +62,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_break_after_hanging_indent))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-break-after-hanging-indent', line=1)
 
         with self.checker_test_object.assertAddsMessages(message):
@@ -227,7 +76,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""self.post_json('/ml/\\trainedclassifierhandler',
+                """self.post_json('/some/\\url',
                 self.payload, expect_errors=True, expected_status_int=401)
 
                 if (a > 1 and
@@ -239,7 +88,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_break_after_hanging_indent))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-break-after-hanging-indent', line=1)
 
         with self.checker_test_object.assertAddsMessages(message):
@@ -254,7 +103,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""\"\"\"Some multiline
+                """\"\"\"Some multiline
                 docstring.
                 \"\"\"
                 # Load JSON.
@@ -280,7 +129,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""self.post_json(  # Random comment
+                """self.post_json(  # Random comment
                 '(',
                 self.payload, expect_errors=True, expected_status_int=401)""")
         node_with_no_error_message.file = filename
@@ -303,7 +152,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""self.post_json(func(  # Random comment
+                """self.post_json(func(  # Random comment
                 '(',
                 self.payload, expect_errors=True, expected_status_int=401))""")
         node_with_no_error_message.file = filename
@@ -326,7 +175,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""self.post_json([  # Random comment
+                """self.post_json([  # Random comment
                 '(',
                 '', '', ''])""")
         node_with_no_error_message.file = filename
@@ -347,7 +196,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 if 5 > 7:
                     self.post_json([
                     '(',
@@ -362,7 +211,7 @@ class HangingIndentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_with_no_error_message))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-break-after-hanging-indent',
             line=7)
 
@@ -388,7 +237,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
                         \"\"\"This is a docstring.\"\"\"
                         a = 1 + 2
@@ -399,11 +248,13 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_classdef(
             node_no_newline_below_class_docstring)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='newline-below-class-docstring',
             node=node_no_newline_below_class_docstring)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_excessive_newline_below_class_docstring(self) -> None:
@@ -416,7 +267,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
                         \"\"\"This is a docstring.\"\"\"
 
@@ -429,11 +280,13 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_classdef(
             node_excessive_newline_below_class_docstring)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='newline-below-class-docstring',
             node=node_excessive_newline_below_class_docstring)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_inline_comment_after_class_docstring(self) -> None:
@@ -446,7 +299,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
                         \"\"\"This is a docstring.\"\"\"
                         # This is a comment.
@@ -459,11 +312,13 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_classdef(
             node_inline_comment_after_class_docstring)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='newline-below-class-docstring',
             node=node_inline_comment_after_class_docstring)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_multiline_class_argument_with_incorrect_style(self) -> None:
@@ -476,7 +331,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(
                             dummy_class):
                         \"\"\"This is a docstring.\"\"\"
@@ -488,11 +343,13 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_classdef(
             node_multiline_class_argument_with_incorrect_style)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='newline-below-class-docstring',
             node=node_multiline_class_argument_with_incorrect_style)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_multiline_class_argument_with_correct_style(self) -> None:
@@ -505,7 +362,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(
                             dummy_class):
                         \"\"\"This is a docstring.\"\"\"
@@ -530,7 +387,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
                         \"\"\"This is a multiline docstring.\"\"\"
 
@@ -554,7 +411,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
                         a = 1 + 2
                 """)
@@ -577,7 +434,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
 
                         \"\"\"This is a multiline docstring.\"\"\"
@@ -603,7 +460,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     class ClassName(dummy_class):
 
                         \"\"\"This is a multiline docstring.\"\"\"
@@ -615,16 +472,18 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_classdef(
             node_newline_before_docstring_with_incorrect_style)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='newline-below-class-docstring',
             node=node_newline_before_docstring_with_incorrect_style)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_malformed_args_section(self) -> None:
         node_malformed_args_section = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                 \"\"\"Does nothing.
 
                 Args:
@@ -633,18 +492,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 a = True
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='malformed-args-section',
             node=node_malformed_args_section
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_malformed_args_section)
 
     def test_malformed_returns_section(self) -> None:
         node_malformed_returns_section = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Return True.
 
                 Returns:
@@ -653,18 +514,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return True
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='malformed-returns-section',
             node=node_malformed_returns_section
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_malformed_returns_section)
 
     def test_malformed_yields_section(self) -> None:
         node_malformed_yields_section = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Yield true.
 
                 Yields:
@@ -673,18 +536,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 yield True
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='malformed-yields-section',
             node=node_malformed_yields_section
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_malformed_yields_section)
 
     def test_malformed_raises_section(self) -> None:
         node_malformed_raises_section = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Raise an exception.
 
                 Raises:
@@ -693,18 +558,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 raise Exception()
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='malformed-raises-section',
             node=node_malformed_raises_section
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_malformed_raises_section)
 
     def test_malformed_args_argument(self) -> None:
         node_malformed_args_argument = astroid.extract_node(
-            u"""def func(*args): #@
+            """def func(*args): #@
                 \"\"\"Does nothing.
 
                 Args:
@@ -713,18 +580,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 a = True
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='malformed-args-argument',
             node=node_malformed_args_argument
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_malformed_args_argument)
 
     def test_well_formated_args_argument(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(*args): #@
+            """def func(*args): #@
                 \"\"\"Does nothing.
 
                 Args:
@@ -739,7 +608,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_formated_args_section(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                 \"\"\"Does nothing.
 
                 Args:
@@ -754,7 +623,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_formated_returns_section(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Does nothing.
 
                 Returns:
@@ -769,7 +638,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_formated_yields_section(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Does nothing.
 
                 Yields:
@@ -784,84 +653,94 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_space_after_docstring(self) -> None:
         node_space_after_docstring = astroid.extract_node(
-            u"""def func():
+            """def func():
                     \"\"\" Hello world.\"\"\"
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='space-after-triple-quote',
             node=node_space_after_docstring)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_space_after_docstring)
 
     def test_two_lines_empty_docstring_raise_correct_message(self) -> None:
         node_with_docstring = astroid.extract_node(
-            u"""def func():
+            """def func():
                     \"\"\"
                     \"\"\"
                     pass
         """)
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-line-docstring-span-two-lines',
             node=node_with_docstring)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_with_docstring)
 
     def test_single_line_docstring_span_two_lines(self) -> None:
         node_single_line_docstring_span_two_lines = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                     \"\"\"This is a docstring.
                     \"\"\"
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-line-docstring-span-two-lines',
             node=node_single_line_docstring_span_two_lines)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_single_line_docstring_span_two_lines)
 
     def test_no_period_at_end(self) -> None:
         node_no_period_at_end = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                     \"\"\"This is a docstring\"\"\"
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-period-used',
             node=node_no_period_at_end)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_no_period_at_end)
 
     def test_empty_line_before_end_of_docstring(self) -> None:
         node_empty_line_before_end = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                     \"\"\"This is a docstring.
 
                     \"\"\"
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='empty-line-before-end', node=node_empty_line_before_end)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_empty_line_before_end)
 
     def test_no_period_at_end_of_a_multiline_docstring(self) -> None:
         node_no_period_at_end = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Args:
@@ -870,19 +749,21 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     Something
         """)
 
-        no_period_at_end_message = testutils.Message(
+        no_period_at_end_message = testutils.MessageTest(
             msg_id='no-period-used', node=node_no_period_at_end)
-        malformed_args_message = testutils.Message(
+        malformed_args_message = testutils.MessageTest(
             msg_id='malformed-args-section', node=node_no_period_at_end)
 
         with self.checker_test_object.assertAddsMessages(
-            no_period_at_end_message, malformed_args_message):
+            no_period_at_end_message, malformed_args_message,
+            ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_no_period_at_end)
 
     def test_no_newline_at_end_of_multi_line_docstring(self) -> None:
         node_no_newline_at_end = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Args:
@@ -890,33 +771,37 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-newline-used-at-end', node=node_no_newline_at_end)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_no_newline_at_end)
 
     def test_no_newline_above_args(self) -> None:
         node_single_newline_above_args = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                 \"\"\"Do something.
                 Args:
                     arg: argument. Description.
                 \"\"\"
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-args',
             node=node_single_newline_above_args)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_single_newline_above_args)
 
     def test_no_newline_above_raises(self) -> None:
         node_single_newline_above_raises = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                     \"\"\"Raises exception.
                     Raises:
                         raises_exception. Description.
@@ -924,18 +809,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     raise exception
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-raises',
             node=node_single_newline_above_raises
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_single_newline_above_raises)
 
     def test_no_newline_above_return(self) -> None:
         node_with_no_space_above_return = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Returns something.
                 Returns:
                     returns_something. Description.
@@ -943,18 +830,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-returns',
             node=node_with_no_space_above_return
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_with_no_space_above_return)
 
     def test_varying_combination_of_newline_above_args(self) -> None:
         node_newline_above_args_raises = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                 \"\"\"Raises exception.
 
                 Args:
@@ -965,17 +854,19 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 raise exception
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-raises',
             node=node_newline_above_args_raises
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_newline_above_args_raises)
 
         node_newline_above_args_returns = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                 \"\"\"Returns Something.
 
                 Args:
@@ -986,17 +877,19 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-returns',
             node=node_newline_above_args_returns
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_newline_above_args_returns)
 
         node_newline_above_returns_raises = astroid.extract_node(
-            u"""def func(): #@
+            """def func(): #@
                 \"\"\"Do something.
 
 
@@ -1011,18 +904,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-space-above-raises',
             node=node_newline_above_returns_raises
         )
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_newline_above_returns_raises)
 
     def test_excessive_newline_above_args(self) -> None:
         node_with_two_newline = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"Returns something.
 
 
@@ -1041,30 +936,31 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     yield something
         """)
 
-        single_space_above_args_message = testutils.Message(
+        single_space_above_args_message = testutils.MessageTest(
             msg_id='single-space-above-args',
             node=node_with_two_newline
         )
 
-        single_space_above_returns_message = testutils.Message(
+        single_space_above_returns_message = testutils.MessageTest(
             msg_id='single-space-above-returns',
             node=node_with_two_newline
         )
 
-        single_space_above_yields_message = testutils.Message(
+        single_space_above_yields_message = testutils.MessageTest(
             msg_id='single-space-above-yield',
             node=node_with_two_newline
         )
 
         with self.checker_test_object.assertAddsMessages(
             single_space_above_args_message, single_space_above_returns_message,
-            single_space_above_yields_message):
+            single_space_above_yields_message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 node_with_two_newline)
 
     def test_return_in_comment(self) -> None:
         node_with_return_in_comment = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"Returns something.
 
                     Args:
@@ -1083,7 +979,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_function_with_no_args(self) -> None:
         node_with_no_args = astroid.extract_node(
-            u"""def func():
+            """def func():
                 \"\"\"Do something.\"\"\"
 
                 a = 1 + 2
@@ -1095,7 +991,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_placed_newline(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"Returns something.
 
                     Args:
@@ -1121,7 +1017,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_invalid_parameter_indentation_in_docstring(self) -> None:
         raises_invalid_indentation_node = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Raises:
@@ -1130,16 +1026,18 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     Something
         """)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='4-space-indentation-in-docstring',
             node=raises_invalid_indentation_node)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 raises_invalid_indentation_node)
 
         return_invalid_indentation_node = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Returns:
@@ -1148,16 +1046,18 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     \"\"\"
                     Something
         """)
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='4-space-indentation-in-docstring',
             node=return_invalid_indentation_node)
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 return_invalid_indentation_node)
 
     def test_invalid_description_indentation_docstring(self) -> None:
         invalid_raises_description_indentation_node = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Raises:
@@ -1167,21 +1067,22 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     Something
         """)
 
-        incorrect_indentation_message = testutils.Message(
+        incorrect_indentation_message = testutils.MessageTest(
             msg_id='8-space-indentation-in-docstring',
             node=invalid_raises_description_indentation_node)
-        malformed_raises_message = testutils.Message(
+        malformed_raises_message = testutils.MessageTest(
             msg_id='malformed-raises-section',
             node=invalid_raises_description_indentation_node)
 
         with self.checker_test_object.assertAddsMessages(
             incorrect_indentation_message, malformed_raises_message,
-            malformed_raises_message):
+            malformed_raises_message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_raises_description_indentation_node)
 
         invalid_return_description_indentation_node = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Returns:
@@ -1190,15 +1091,17 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     \"\"\"
                     return Something
         """)
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='4-space-indentation-in-docstring',
             node=invalid_return_description_indentation_node)
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_return_description_indentation_node)
 
         invalid_yield_description_indentation_node = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Yields:
@@ -1207,16 +1110,18 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     \"\"\"
                     yield Something
         """)
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='4-space-indentation-in-docstring',
             node=invalid_yield_description_indentation_node)
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_yield_description_indentation_node)
 
     def test_malformed_parameter_docstring(self) -> None:
         invalid_parameter_name = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Raises:
@@ -1226,18 +1131,20 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                     Something
         """)
 
-        malformed_raises_message = testutils.Message(
+        malformed_raises_message = testutils.MessageTest(
             msg_id='malformed-raises-section',
             node=invalid_parameter_name)
 
         with self.checker_test_object.assertAddsMessages(
-            malformed_raises_message, malformed_raises_message):
+            malformed_raises_message, malformed_raises_message,
+            ignore_position=True
+        ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_parameter_name)
 
     def test_well_formed_single_line_docstring(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.\"\"\"
                     Something
         """)
@@ -1248,7 +1155,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_formed_multi_line_docstring(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Args:
@@ -1263,7 +1170,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
 
     def test_well_formed_multi_line_description_docstring(self) -> None:
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Args:
@@ -1280,7 +1187,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 node_with_no_error_message)
 
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Raises:
@@ -1298,7 +1205,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 node_with_no_error_message)
 
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg):
+            """def func(arg):
                     \"\"\"This is a docstring.
 
                         Returns:
@@ -1321,7 +1228,7 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 node_with_no_error_message)
 
         node_with_no_error_message = astroid.extract_node(
-            u"""def func(arg): #@
+            """def func(arg): #@
                     \"\"\"This is a docstring.
 
                         Returns:
@@ -1367,15 +1274,16 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='8-space-indentation-for-arg-in-descriptions-doc',
                 node=invalid_args_description_node,
                 args='Incorrect'
             ),
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='malformed-args-section',
                 node=invalid_args_description_node,
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_args_description_node)
@@ -1395,11 +1303,12 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='4-space-indentation-for-arg-parameters-doc',
                 node=invalid_param_indentation_node,
                 args='test_var_one:'
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_param_indentation_node)
@@ -1419,10 +1328,11 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='incorrect-indentation-for-arg-header-doc',
                 node=invalid_header_indentation_node,
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 invalid_header_indentation_node)
@@ -1556,21 +1466,23 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 yield result #@
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='redundant-returns-doc',
                 node=missing_yield_type_func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 missing_yield_type_func_node)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-yield-doc',
                 node=missing_yield_type_func_node
-            ), testutils.Message(
+            ), testutils.MessageTest(
                 msg_id='missing-yield-type-doc',
                 node=missing_yield_type_func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_yieldfrom(
                 missing_yield_type_yield_node)
@@ -1597,21 +1509,23 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return result #@
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='redundant-yields-doc',
                 node=missing_return_type_func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 missing_return_type_func_node)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-return-doc',
                 node=missing_return_type_func_node
-            ), testutils.Message(
+            ), testutils.MessageTest(
                 msg_id='missing-return-type-doc',
                 node=missing_return_type_func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_return(
                 missing_return_type_return_node)
@@ -1650,11 +1564,12 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             raise Exception #@
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-raises-doc',
                 args=('Exception',),
                 node=missing_raise_type_func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_raise(
                 missing_raise_type_raise_node)
@@ -1788,11 +1703,12 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-param-doc',
                 node=missing_param_func_node,
                 args=('args, kwargs',),
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 missing_param_func_node)
@@ -1813,28 +1729,29 @@ class DocstringParameterCheckerTests(unittest.TestCase):
             return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-param-doc',
                 node=missing_param_func_node,
                 args=('test_var_two',),
-            ), testutils.Message(
+            ), testutils.MessageTest(
                 msg_id='missing-type-doc',
                 node=missing_param_func_node,
                 args=('test_var_two',),
-            ), testutils.Message(
+            ), testutils.MessageTest(
                 msg_id='differing-param-doc',
                 node=missing_param_func_node,
                 args=('invalid_var_name',),
-            ), testutils.Message(
+            ), testutils.MessageTest(
                 msg_id='differing-type-doc',
                 node=missing_param_func_node,
                 args=('invalid_var_name',),
             ),
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='8-space-indentation-for-arg-in-descriptions-doc',
                 node=missing_param_func_node,
                 args='invalid_var_name:'
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 missing_param_func_node)
@@ -1866,11 +1783,12 @@ class DocstringParameterCheckerTests(unittest.TestCase):
                 return result
         """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='multiple-constructor-doc',
                 node=class_node,
                 args=(class_node.name,),
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_functiondef(
                 multiple_constructor_func_node)
@@ -1886,11 +1804,12 @@ class DocstringParameterCheckerTests(unittest.TestCase):
         raise_node = node.body[0]
         func_node = raise_node.frame()
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='missing-raises-doc',
                 args=('RuntimeError',),
                 node=func_node
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_raise(raise_node)
 
@@ -1916,11 +1835,12 @@ class ImportOnlyModulesCheckerTests(unittest.TestCase):
             import sys
         """)
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='import-only-modules',
                 node=importfrom_node2,
                 args=('error', 'os')
             ),
+            ignore_position=True,
         ):
             checker_test_object.checker.visit_importfrom(
                 importfrom_node2)
@@ -1944,11 +1864,12 @@ class ImportOnlyModulesCheckerTests(unittest.TestCase):
             from os import invalid_module #@
         """)
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='import-only-modules',
                 node=importfrom_node5,
                 args=('invalid_module', 'os')
             ),
+            ignore_position=True,
         ):
             checker_test_object.checker.visit_importfrom(importfrom_node5)
 
@@ -1987,7 +1908,7 @@ class BackslashContinuationCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""message1 = 'abc'\\\n""" # pylint: disable=backslash-continuation
+                """message1 = 'abc'\\\n""" # pylint: disable=backslash-continuation
                 """'cde'\\\n"""             # pylint: disable=backslash-continuation
                 """'xyz'
                 message2 = 'abc\\\\'
@@ -2003,11 +1924,11 @@ class BackslashContinuationCheckerTests(unittest.TestCase):
         checker_test_object.checker.process_module(node)
 
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='backslash-continuation',
                 line=1
             ),
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='backslash-continuation',
                 line=2
             ),
@@ -2038,10 +1959,11 @@ class FunctionArgsOrderCheckerTests(unittest.TestCase):
             return result
         """)
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='function-args-order-self',
                 node=functiondef_node2
             ),
+            ignore_position=True,
         ):
             checker_test_object.checker.visit_functiondef(functiondef_node2)
 
@@ -2052,10 +1974,11 @@ class FunctionArgsOrderCheckerTests(unittest.TestCase):
             return result
         """)
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='function-args-order-cls',
                 node=functiondef_node3
             ),
+            ignore_position=True,
         ):
             checker_test_object.checker.visit_functiondef(functiondef_node3)
 
@@ -2102,11 +2025,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         )
         node_err_import.root().name = 'oppia.core.storage.topic'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_import,
                 args=('core.domain*', '*core.storage*'),
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_import(node_err_import)
 
@@ -2126,11 +2050,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_err_importfrom.root().name = 'oppia.core.storage.topic'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_importfrom,
                 args=('core.domain*', '*core.storage*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node_err_importfrom)
@@ -2152,11 +2077,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_err_import.root().name = 'oppia.core.domain'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_import,
                 args=('core.controllers*', '*core.domain*'),
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_import(node_err_import)
 
@@ -2177,11 +2103,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         )
         node_err_importfrom.root().name = 'oppia.core.domain'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_importfrom,
                 args=('core.controllers*', '*core.domain*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node_err_importfrom)
@@ -2204,11 +2131,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         )
         node_err_import.root().name = 'oppia.core.domain.exp_domain'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import-from',
                 node=node_err_import,
                 args=('*_service*', 'core.domain', '*core.domain.*_domain'),
             ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_import(node_err_import)
 
@@ -2230,11 +2158,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         )
         node_err_importfrom.root().name = 'oppia.core.domain.collection_domain'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import-from',
                 node=node_err_importfrom,
                 args=('*_cleaner', 'core.domain', '*core.domain.*_domain'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node_err_importfrom)
@@ -2257,11 +2186,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_err_import.root().name = 'oppia.core.controllers.controller'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_import,
                 args=('core.platform*', '*core.controllers*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_import(node_err_import)
 
@@ -2272,11 +2202,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_err_import.root().name = 'oppia.core.controllers.controller'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_err_import,
                 args=('core.storage*', '*core.controllers*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_import(node_err_import)
 
@@ -2296,11 +2227,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_no_err_importfrom.root().name = 'oppia.core.controllers.controller'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_no_err_importfrom,
                 args=('core.platform*', '*core.controllers*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node_no_err_importfrom)
@@ -2312,11 +2244,12 @@ class RestrictedImportCheckerTests(unittest.TestCase):
         """)
         node_no_err_importfrom.root().name = 'oppia.core.controllers.controller'
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='invalid-import',
                 node=node_no_err_importfrom,
                 args=('core.storage*', '*core.controllers*'),
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node_no_err_importfrom)
@@ -2347,7 +2280,7 @@ class SingleCharAndNewlineAtEOFCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""c = 'something dummy'
+                """c = 'something dummy'
                 """)
         node_missing_newline_at_eof.file = filename
         node_missing_newline_at_eof.path = filename
@@ -2355,7 +2288,7 @@ class SingleCharAndNewlineAtEOFCheckerTests(unittest.TestCase):
         checker_test_object.checker.process_module(node_missing_newline_at_eof)
 
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='newline-at-eof',
                 line=2
             ),
@@ -2369,14 +2302,14 @@ class SingleCharAndNewlineAtEOFCheckerTests(unittest.TestCase):
         temp_file = tempfile.NamedTemporaryFile()
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
-            tmp.write(u"""1""")
+            tmp.write("""1""")
         node_single_char_file.file = filename
         node_single_char_file.path = filename
 
         checker_test_object.checker.process_module(node_single_char_file)
 
         with checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='only-one-character',
                 line=1
             ),
@@ -2390,7 +2323,7 @@ class SingleCharAndNewlineAtEOFCheckerTests(unittest.TestCase):
         temp_file = tempfile.NamedTemporaryFile()
         filename = temp_file.name
         with utils.open_file(filename, 'w') as tmp:
-            tmp.write(u"""x = 'something dummy'""")
+            tmp.write("""x = 'something dummy'""")
         node_with_no_error_message.file = filename
         node_with_no_error_message.path = filename
 
@@ -2409,22 +2342,19 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             pylint_extensions.TypeIgnoreCommentChecker)
         self.checker_test_object.setup_method()
         self.checker_test_object.checker.config.allowed_type_ignore_error_codes = [  # pylint: disable=line-too-long
-            'attr-defined',
-            'union-attr',
             'arg-type',
+            'assignment',
+            'attr-defined',
             'call-overload',
+            'dict-item',
+            'func-returns-value',
+            'list-item',
+            'misc',
             'override',
             'return',
-            'assignment',
-            'list-item',
-            'dict-item',
-            'typeddict-item',
-            'func-returns-value',
-            'misc',
             'type-arg',
-            'no-untyped-def',
-            'no-untyped-call',
-            'no-any-return'
+            'typeddict-item',
+            'union-attr',
         ]
 
     def test_type_ignore_used_without_comment_raises_error(self) -> None:
@@ -2437,7 +2367,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 suggestion.change.new_value = (  # type: ignore[attr-defined]
                     new_content
                 ) #@
@@ -2445,7 +2375,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_function_with_type_ignore_only.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='mypy-ignore-used',
             line=2,
             node=node_function_with_type_ignore_only
@@ -2466,7 +2396,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 suggestion.change.new_value = (  # type: ignore[some-new-ignore]
                     new_content
                 ) #@
@@ -2474,7 +2404,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_prohibited_error_code.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='prohibited-type-ignore-used',
             line=2,
             node=node_with_prohibited_error_code,
@@ -2498,7 +2428,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 # Here we use MyPy ignore because ...
                 suggestion.change.new_value = (  # type: ignore[attr-defined]
                     new_content
@@ -2516,7 +2446,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_prohibited_type_ignore_error_code.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='prohibited-type-ignore-used',
             line=7,
             node=node_with_prohibited_type_ignore_error_code,
@@ -2542,15 +2472,15 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                suggestion.change.new_value = (  # type: ignore[arg-type, no-untyped-call, truthy-bool] pylint: disable=line-too-long
+                """
+                suggestion.change.new_value = (  # type: ignore[arg-type, truthy-bool] pylint: disable=line-too-long
                     new_content
                 ) #@
                 """
             )
         node_with_prohibited_error_code_in_combined_form.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='prohibited-type-ignore-used',
             line=2,
             node=node_with_prohibited_error_code_in_combined_form,
@@ -2574,8 +2504,8 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                suggestion.change.new_value = (  # type: ignore[return-none, no-untyped-call, truthy-bool] pylint: disable=line-too-long
+                """
+                suggestion.change.new_value = (  # type: ignore[return-none, truthy-bool] pylint: disable=line-too-long
                     new_content
                 ) #@
                 """
@@ -2583,7 +2513,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
         node_with_multiple_prohibited_error_code_in_combined_form.file = (
             filename)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='prohibited-type-ignore-used',
             line=2,
             node=node_with_multiple_prohibited_error_code_in_combined_form,
@@ -2608,7 +2538,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 # Here we use MyPy ignore because ...
                 suggestion.change.new_value = (   # type: ignore[attr-defined]
                     new_content
@@ -2631,17 +2561,19 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_function_with_extra_comment.file = filename
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='redundant-type-comment',
             line=7,
             node=node_function_with_extra_comment
         )
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='redundant-type-comment',
             line=15,
             node=node_function_with_extra_comment
         )
-        with self.checker_test_object.assertAddsMessages(message1, message2):
+        with self.checker_test_object.assertAddsMessages(
+            message1, message2
+        ):
             self.checker_test_object.checker.visit_module(
                 node_function_with_extra_comment
             )
@@ -2656,7 +2588,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 # Here we use MyPy ignore because ...
                 suggestion.change.new_value = (   # type: ignore[attr-defined]
                     new_content
@@ -2674,7 +2606,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_function_with_extra_comment2.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='redundant-type-comment',
             line=7,
             node=node_function_with_extra_comment2
@@ -2695,7 +2627,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 suggestion.change.new_value = (  # pylint: disable=line-too-long type: ignore[attr-defined]
                     new_content
                 )
@@ -2704,7 +2636,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_type_ignore.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='mypy-ignore-used',
             line=2,
             node=node_with_type_ignore
@@ -2725,7 +2657,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 # Here we use MyPy ignore because attributes on BaseChange
                 # class are defined dynamically.
                 suggestion.change.new_value = (  # type: ignore[attr-defined]
@@ -2756,7 +2688,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 # Here we use MyPy ignore because ...
                 suggestion.change.new_value = (  # type: ignore[attr-defined, list-item]
                     new_content
@@ -2775,32 +2707,6 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         temp_file.close()
 
-    def test_untyped_call_type_ignores_should_not_raise_error(self) -> None:
-        node_function = astroid.scoped_nodes.Module(
-            name='test',
-            doc='Custom test'
-        )
-        temp_file = tempfile.NamedTemporaryFile()
-        filename = temp_file.name
-
-        with utils.open_file(filename, 'w') as tmp:
-            tmp.write(
-                u"""
-                # Here we use MyPy ignore because attributes on BaseChange
-                # class are defined dynamically.
-                suggestion.change.new_value = (  # type: ignore[attr-defined]
-                    new_content
-                )
-
-                func_only_accept_str(1234)  # type: ignore[no-untyped-call] #@
-                """
-            )
-        node_function.file = filename
-
-        with self.checker_test_object.assertNoMessages():
-            self.checker_test_object.checker.visit_module(node_function)
-        temp_file.close()
-
     def test_raises_error_if_gap_in_ignore_and_comment_is_more_than_fifteen(
         self
     ) -> None:
@@ -2815,8 +2721,8 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # Here we use MyPy ignore because stubs of protobuf are not
+                """
+                # Here we use MyPy ignore because stubs of this lib are not
                 # available yet.
 
                 variable_one: str = '123'
@@ -2838,12 +2744,12 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_ignore_and_more_than_fifteen_gap.file = filename
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='mypy-ignore-used',
             line=18,
             node=node_with_ignore_and_more_than_fifteen_gap
         )
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='redundant-type-comment',
             line=2,
             node=node_with_ignore_and_more_than_fifteen_gap
@@ -2866,8 +2772,8 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # TODO(#sll): Here we use MyPy ignore because stubs of protobuf
+                """
+                # TODO(#sll): Here we use MyPy ignore because stubs of this lib
                 # are not available yet.
 
                 def foo(exp_id: str) -> str:  # type: ignore
@@ -2876,12 +2782,12 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_generic_type_ignore.file = filename
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='generic-mypy-ignore-used',
             line=5,
             node=node_with_generic_type_ignore
         )
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='redundant-type-comment',
             line=2,
             node=node_with_generic_type_ignore
@@ -2906,8 +2812,8 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # TODO(#sll): Here we use MyPy ignore because stubs of protobuf
+                """
+                # TODO(#sll): Here we use MyPy ignore because stubs of this lib
                 # are not available yet.
                 def foo(exp_id: str) -> str:  # type: ignore[arg-type]
                     return 'hi' #@
@@ -2915,7 +2821,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
                 def foo(exp_id: str) -> str:  # type: ignore
                     return 'hi' #@
 
-                # TODO(#sll): Here we use MyPy ignore because stubs of protobuf
+                # TODO(#sll): Here we use MyPy ignore because stubs of this lib
                 # are not available yet.
                 def foo(exp_id: str) -> str:  # type: ignore[misc]
                     return 'hi' #@
@@ -2923,7 +2829,7 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
             )
         node_with_both_generic_and_non_generic_type_ignores.file = filename
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='generic-mypy-ignore-used',
             line=7,
             node=node_with_both_generic_and_non_generic_type_ignores
@@ -2945,8 +2851,8 @@ class TypeIgnoreCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # TODO(#sll): Here we use MyPy ignore because stubs of protobuf
+                """
+                # TODO(#sll): Here we use MyPy ignore because stubs of this lib
                 # are not available yet.
 
                 def foo(exp_id: str) -> str:  # type: ignore[arg-type]
@@ -2984,7 +2890,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 schema_dict: Dict[str, Any] = {
                     'key': 'value'
                 } #@
@@ -2992,7 +2898,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
             )
         node_with_any_type.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_any_type
@@ -3011,13 +2917,13 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                func(proto_buff_stuff: object) #@
+                """
+                func(variable_123: object) #@
                 """
             )
         node_with_object_type.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='object-class-used',
             line=2,
             node=node_with_object_type
@@ -3036,13 +2942,13 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 func(cast(str, change.new_value)) #@
                 """
             )
         node_with_cast_method.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='cast-func-used',
             line=2,
             node=node_with_cast_method
@@ -3063,12 +2969,12 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 schema_dict: Dict[str, Any] = {
                     'key': 'value'
                 }
 
-                def func(proto_buff_stuff: object) -> None:
+                def func(variable_123: object) -> None:
                     pass
 
                 # Some other contents of the module.
@@ -3085,17 +2991,17 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
             )
         node_with_combined_types.file = filename
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_combined_types
         )
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='object-class-used',
             line=6,
             node=node_with_combined_types
         )
-        message3 = testutils.Message(
+        message3 = testutils.MessageTest(
             msg_id='cast-func-used',
             line=18,
             node=node_with_combined_types
@@ -3120,14 +3026,14 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 def foo(*args: Any) -> None:
                     pass #@
                 """
             )
         node_with_any_type_arg.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_any_type_arg
@@ -3147,14 +3053,14 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 def foo(*args: str) -> Any:
                     pass #@
                 """
             )
         node_with_any_type_return.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_any_type_return
@@ -3174,14 +3080,14 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 def foo(*args: Any) -> Any:
                     pass #@
                 """
             )
         node_with_any_type_return_and_args.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_any_type_return_and_args
@@ -3201,7 +3107,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 def foo(*args: Any) -> Any:
                     pass
 
@@ -3214,12 +3120,12 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
             )
         node_with_multiple_any_type_functions.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='any-type-used',
             line=2,
             node=node_with_multiple_any_type_functions
         )
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='any-type-used',
             line=8,
             node=node_with_multiple_any_type_functions
@@ -3242,7 +3148,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 from typing import Any, cast #@
                 """
             )
@@ -3265,7 +3171,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 from typing import (
                     Any, Dict, List, Optional, cast
                 ) #@
@@ -3291,7 +3197,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 from typing import Any
 
                 # Here we use type Any because, this function can take
@@ -3331,7 +3237,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 from typing import Any, cast
 
                 # Here we use type Any because, this function can take
@@ -3349,12 +3255,12 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
                     'key': 'value'
                 }
 
-                # Here we use object because stubs of protobuf are not
+                # Here we use object because stubs of this lib are not
                 # available yet. So, instead of Any we used object here.
-                def save_classifier_data(
+                def baz(
                     exp_id: str,
                     job_id: str,
-                    classifier_data_proto: object
+                    variable_123: object
                 ) -> None:
                     pass #@
                 """
@@ -3379,8 +3285,8 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # Here we use object because stubs of protobuf are not
+                """
+                # Here we use object because stubs of this lib are not
                 # available yet. So, instead of Any we used object here.
                 def foo(exp_id: object) -> object:
                     return 'hi' #@
@@ -3408,8 +3314,8 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # Here we use object because stubs of protobuf are not
+                """
+                # Here we use object because stubs of this lib are not
                 # available yet. So, instead of Any we used object here.
 
                 variable_one: str = '123'
@@ -3431,7 +3337,7 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
             )
         node_with_object_and_more_than_expected_gap.file = filename
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='object-class-used',
             line=18,
             node=node_with_object_and_more_than_expected_gap
@@ -3453,8 +3359,8 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # Here we use object because stubs of protobuf are not
+                """
+                # Here we use object because stubs of this lib are not
                 # available yet. So, instead of Any we used object here.
 
                 variable_one: str = '123'
@@ -3487,8 +3393,8 @@ class ExceptionalTypesCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
-                # TODO(#sll): Here we use object because stubs of protobuf
+                """
+                # TODO(#sll): Here we use object because stubs of this lib
                 # are not available yet. So, instead of Any we used object
                 # here.
                 def foo(exp_id: object) -> object:
@@ -3522,7 +3428,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# This is a multiline
+                """# This is a multiline
                 # comment/
 
                 # Comment.
@@ -3533,7 +3439,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_invalid_punctuation))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='invalid-punctuation-used',
             line=2)
 
@@ -3549,7 +3455,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""#Something.
+                """#Something.
                 """)
         node_no_space_at_beginning.file = filename
         node_no_space_at_beginning.path = filename
@@ -3557,7 +3463,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_no_space_at_beginning))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-space-at-beginning',
             line=1)
 
@@ -3573,7 +3479,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
 
                     # something.
                 """)
@@ -3583,7 +3489,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_no_capital_letter_at_beginning))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-capital-letter-at-beginning',
             line=3)
 
@@ -3599,7 +3505,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
                 # pylint: disable
                 a = 1 + 2  # pylint: disable
                 """)
@@ -3621,7 +3527,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""a = 1 + 2  # type: ignore[some-rule]
+                """a = 1 + 2  # type: ignore[some-rule]
                 """)
 
         node_inline_comment_with_allowed_pragma.file = filename
@@ -3645,7 +3551,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""a = 1 + 2  # isort:skip # pylint: ignore[some-rule]
+                """a = 1 + 2  # isort:skip # pylint: ignore[some-rule]
                 """)
 
         node_inline_comment_with_allowed_pragma.file = filename
@@ -3667,7 +3573,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""a = 1 + 2  # not_a_valid_pragma
+                """a = 1 + 2  # not_a_valid_pragma
                 """)
 
         node_inline_comment_with_invalid_pragma.file = filename
@@ -3677,7 +3583,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
            pylint_utils.tokenize_module(
                node_inline_comment_with_invalid_pragma))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-allowed-inline-pragma',
             line=1)
 
@@ -3693,7 +3599,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
 
                 # variable_name is used.
                 """)
@@ -3715,7 +3621,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
 
                 # v2 is used.
                 """)
@@ -3737,7 +3643,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
 
                 # str. variable is type of str.
                 """)
@@ -3759,7 +3665,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
                     \"\"\"# str. variable is type of str.\"\"\"
                     \"\"\"# str. variable is type
                     of str.\"\"\"
@@ -3782,7 +3688,7 @@ class SingleLineCommentCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""# coding: utf-8
+                """# coding: utf-8
 
                 # Multi
                 # line
@@ -3816,7 +3722,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     \"\"\" this file does something \"\"\"
                     import something
                     import random
@@ -3828,11 +3734,13 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_module(
             node_no_empty_line_below_fileoverview)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-empty-line-provided-below-fileoverview',
             node=node_no_empty_line_below_fileoverview)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_extra_empty_lines_below_fileoverview(self) -> None:
@@ -3844,7 +3752,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
 
                     \"\"\" this file does something \"\"\"
 
@@ -3859,11 +3767,13 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_module(
             node_extra_empty_lines_below_fileoverview)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='only-a-single-empty-line-should-be-provided',
             node=node_extra_empty_lines_below_fileoverview)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_extra_empty_lines_below_fileoverview_with_unicode_characters(
@@ -3877,7 +3787,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     #this comment has a unicode character \u2713
                     \"\"\" this file does \u2715 something \"\"\"
 
@@ -3891,11 +3801,13 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_module(
             node_extra_empty_lines_below_fileoverview)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='only-a-single-empty-line-should-be-provided',
             node=node_extra_empty_lines_below_fileoverview)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_no_empty_line_below_fileoverview_with_unicode_characters(
@@ -3909,7 +3821,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     #this comment has a unicode character \u2713
                     \"\"\" this file does \u2715 something \"\"\"
                     import something
@@ -3922,11 +3834,13 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_module(
             node_no_empty_line_below_fileoverview)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='no-empty-line-provided-below-fileoverview',
             node=node_no_empty_line_below_fileoverview)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
     def test_single_new_line_below_file_overview(self) -> None:
@@ -3938,7 +3852,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     \"\"\" this file does something \"\"\"
 
                     import something
@@ -3963,7 +3877,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     import something
                     import random
                 """)
@@ -3985,7 +3899,7 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     \"\"\" this file does something \"\"\"   """)
         node_file_overview_at_end_of_file.file = filename
         node_file_overview_at_end_of_file.path = filename
@@ -3994,11 +3908,13 @@ class BlankLineBelowFileOverviewCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.visit_module(
             node_file_overview_at_end_of_file)
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='only-a-single-empty-line-should-be-provided',
             node=node_file_overview_at_end_of_file)
 
-        with self.checker_test_object.assertAddsMessages(message):
+        with self.checker_test_object.assertAddsMessages(
+            message, ignore_position=True
+        ):
             temp_file.close()
 
 
@@ -4020,7 +3936,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     # pylint: disable=invalid-name
                     def funcName():
                         \"\"\" # pylint: disable=test-purpose\"\"\"
@@ -4033,11 +3949,11 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_pragma_for_multiline))
 
-        message1 = testutils.Message(
+        message1 = testutils.MessageTest(
             msg_id='single-line-pragma',
             line=2)
 
-        message2 = testutils.Message(
+        message2 = testutils.MessageTest(
             msg_id='single-line-pragma',
             line=6)
 
@@ -4053,7 +3969,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     # pylint: disable=single-line-pragma
                     def func():
                         \"\"\"
@@ -4069,7 +3985,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
            pylint_utils.tokenize_module(
                node_enable_single_line_pragma_for_multiline))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-line-pragma',
             line=2)
 
@@ -4084,7 +4000,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     # pylint: disable=invalid-name, single-line-pragma
                     def funcName():
                         \"\"\"
@@ -4100,7 +4016,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
            pylint_utils.tokenize_module(
                 node_enable_single_line_pragma_with_invalid_name))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-line-pragma',
             line=2)
 
@@ -4115,7 +4031,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     def funcName():  # pylint: disable=single-line-pragma
                         pass
                 """)
@@ -4136,7 +4052,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                     # pylint:disable=single-line-pragma
                     def func():
                         \"\"\"
@@ -4151,7 +4067,7 @@ class SingleLinePragmaCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_no_and_extra_space_before_pylint))
 
-        message = testutils.Message(
+        message = testutils.MessageTest(
             msg_id='single-line-pragma',
             line=2)
 
@@ -4177,7 +4093,7 @@ class SingleSpaceAfterKeyWordCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 if(False):
                     pass
                 elif(True):
@@ -4193,15 +4109,15 @@ class SingleSpaceAfterKeyWordCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_no_space_after_keyword))
 
-        if_message = testutils.Message(
+        if_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('if'), line=2)
-        elif_message = testutils.Message(
+        elif_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('elif'), line=4)
-        while_message = testutils.Message(
+        while_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('while'), line=6)
-        yield_message = testutils.Message(
+        yield_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('yield'), line=8)
-        if_exp_message = testutils.Message(
+        if_exp_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('if'), line=9)
 
         with self.checker_test_object.assertAddsMessages(
@@ -4218,7 +4134,7 @@ class SingleSpaceAfterKeyWordCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 if  False:
                     pass
                 elif  True:
@@ -4234,15 +4150,15 @@ class SingleSpaceAfterKeyWordCheckerTests(unittest.TestCase):
         self.checker_test_object.checker.process_tokens(
            pylint_utils.tokenize_module(node_multiple_spaces_after_keyword))
 
-        if_message = testutils.Message(
+        if_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('if'), line=2)
-        elif_message = testutils.Message(
+        elif_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('elif'), line=4)
-        while_message = testutils.Message(
+        while_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('while'), line=6)
-        yield_message = testutils.Message(
+        yield_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('yield'), line=8)
-        if_exp_message = testutils.Message(
+        if_exp_message = testutils.MessageTest(
             msg_id='single-space-after-keyword', args=('if'), line=9)
 
         with self.checker_test_object.assertAddsMessages(
@@ -4259,7 +4175,7 @@ class SingleSpaceAfterKeyWordCheckerTests(unittest.TestCase):
 
         with utils.open_file(filename, 'w') as tmp:
             tmp.write(
-                u"""
+                """
                 if False:
                     pass
                 elif True:
@@ -4296,10 +4212,10 @@ class InequalityWithNoneCheckerTests(unittest.TestCase):
             """
         )
         compare_node = if_node.test
-        not_equal_none_message = testutils.Message(
+        not_equal_none_message = testutils.MessageTest(
             msg_id='inequality-with-none', node=compare_node)
         with self.checker_test_object.assertAddsMessages(
-            not_equal_none_message
+            not_equal_none_message, ignore_position=True
         ):
             self.checker_test_object.checker.visit_compare(compare_node)
 
@@ -4315,10 +4231,10 @@ class InequalityWithNoneCheckerTests(unittest.TestCase):
             """
         )
         compare_node = if_node.test
-        not_equal_none_message = testutils.Message(
+        not_equal_none_message = testutils.MessageTest(
             msg_id='inequality-with-none', node=compare_node)
         with self.checker_test_object.assertAddsMessages(
-            not_equal_none_message
+            not_equal_none_message, ignore_position=True
         ):
             self.checker_test_object.checker.visit_compare(compare_node)
 
@@ -4359,14 +4275,14 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
         a.example_attr() #@
         """)
 
-        message_remove_example_func = testutils.Message(
+        message_remove_example_func = testutils.MessageTest(
             msg_id='remove-disallowed-function-calls',
             node=call1,
             args='example_func',
             confidence=interfaces.UNDEFINED
         )
 
-        message_remove_example_attr = testutils.Message(
+        message_remove_example_attr = testutils.MessageTest(
             msg_id='remove-disallowed-function-calls',
             node=call2,
             args='a.example_attr',
@@ -4375,7 +4291,8 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
 
         with self.checker_test_object.assertAddsMessages(
             message_remove_example_func,
-            message_remove_example_attr
+            message_remove_example_attr,
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_call(call1)
             self.checker_test_object.checker.visit_call(call2)
@@ -4396,14 +4313,14 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
             b.a.next() #@
         """)
 
-        message_replace_disallowed_datetime = testutils.Message(
+        message_replace_disallowed_datetime = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call1,
             args=('datetime.datetime.now', 'datetime.datetime.utcnow'),
             confidence=interfaces.UNDEFINED
         )
 
-        message_replace_disallowed_assert_equals = testutils.Message(
+        message_replace_disallowed_assert_equals = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call2,
             args=('self.assertEquals', 'self.assertEqual'),
@@ -4413,6 +4330,7 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
         with self.checker_test_object.assertAddsMessages(
             message_replace_disallowed_datetime,
             message_replace_disallowed_assert_equals,
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_call(call1)
             self.checker_test_object.checker.visit_call(call2)
@@ -4435,14 +4353,14 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
         c.someexample_attr() #@
         """)
 
-        message_remove_example_func = testutils.Message(
+        message_remove_example_func = testutils.MessageTest(
             msg_id='remove-disallowed-function-calls',
             node=call1,
             args='somethingexample_func',
             confidence=interfaces.UNDEFINED
         )
 
-        message_remove_example_attr = testutils.Message(
+        message_remove_example_attr = testutils.MessageTest(
             msg_id='remove-disallowed-function-calls',
             node=call2,
             args='c.someexample_attr',
@@ -4451,7 +4369,8 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
 
         with self.checker_test_object.assertAddsMessages(
             message_remove_example_func,
-            message_remove_example_attr
+            message_remove_example_attr,
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_call(call1)
             self.checker_test_object.checker.visit_call(call2)
@@ -4473,28 +4392,28 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
         d.b.example_attr() #@
         """)
 
-        message_replace_example_func = testutils.Message(
+        message_replace_example_func = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call1,
             args=('somethingexample_func', 'other_func'),
             confidence=interfaces.UNDEFINED
         )
 
-        message_replace_example_attr1 = testutils.Message(
+        message_replace_example_attr1 = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call2,
             args=('d.example_attr', 'other_attr'),
             confidence=interfaces.UNDEFINED
         )
 
-        message_replace_example_attr2 = testutils.Message(
+        message_replace_example_attr2 = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call3,
             args=('d.example_attr', 'other_attr'),
             confidence=interfaces.UNDEFINED
         )
 
-        message_replace_example_attr3 = testutils.Message(
+        message_replace_example_attr3 = testutils.MessageTest(
             msg_id='replace-disallowed-function-calls',
             node=call4,
             args=('d.b.example_attr', 'other_attr'),
@@ -4505,7 +4424,8 @@ class DisallowedFunctionsCheckerTests(unittest.TestCase):
             message_replace_example_func,
             message_replace_example_attr1,
             message_replace_example_attr2,
-            message_replace_example_attr3
+            message_replace_example_attr3,
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_call(call1)
             self.checker_test_object.checker.visit_call(call2)
@@ -4560,11 +4480,11 @@ class NonTestFilesFunctionNameCheckerTests(unittest.TestCase):
             """
         )
         def_node.root().name = 'random_module_nontest'
-        non_test_function_name_message = testutils.Message(
+        non_test_function_name_message = testutils.MessageTest(
             msg_id='non-test-files-function-name-checker', node=def_node)
 
         with self.checker_test_object.assertAddsMessages(
-            non_test_function_name_message
+            non_test_function_name_message, ignore_position=True
         ):
             self.checker_test_object.checker.visit_functiondef(def_node)
 
@@ -4604,11 +4524,12 @@ class DisallowHandlerWithoutSchemaTests(unittest.TestCase):
                 URL_PATH_ARGS_SCHEMAS = {}
             """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='no-schema-for-handler-args',
                 node=schemaless_class_node,
                 args=(schemaless_class_node.name)
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_classdef(
                 schemaless_class_node)
@@ -4626,11 +4547,12 @@ class DisallowHandlerWithoutSchemaTests(unittest.TestCase):
             """)
 
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='no-schema-for-url-path-elements',
                 node=schemaless_class_node,
                 args=(schemaless_class_node.name)
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_classdef(
                 schemaless_class_node)
@@ -4695,11 +4617,12 @@ class DisallowHandlerWithoutSchemaTests(unittest.TestCase):
             """)
 
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='no-schema-for-url-path-elements',
                 node=schemaless_class_node,
                 args=(schemaless_class_node.name)
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_classdef(
                 schemaless_class_node)
@@ -4725,11 +4648,12 @@ class DisallowHandlerWithoutSchemaTests(unittest.TestCase):
             """)
 
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='url-path-args-schemas-must-be-dict',
                 node=schemaless_class_node,
                 args=(schemaless_class_node.name)
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_classdef(
                 schemaless_class_node)
@@ -4755,11 +4679,12 @@ class DisallowHandlerWithoutSchemaTests(unittest.TestCase):
             """)
 
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='handler-args-schemas-must-be-dict',
                 node=schemaless_class_node,
                 args=(schemaless_class_node.name)
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_classdef(
                 schemaless_class_node)
@@ -4779,10 +4704,11 @@ class DisallowedImportsCheckerTests(unittest.TestCase):
     ) -> None:
         node = astroid.extract_node("""from typing import Any, cast, Text""")
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='disallowed-text-import',
                 node=node,
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node)
@@ -4796,10 +4722,11 @@ class DisallowedImportsCheckerTests(unittest.TestCase):
                 Any, Dict, List, Optional, Sequence, Text, TypeVar)
             """)
         with self.checker_test_object.assertAddsMessages(
-            testutils.Message(
+            testutils.MessageTest(
                 msg_id='disallowed-text-import',
                 node=node,
-            )
+            ),
+            ignore_position=True,
         ):
             self.checker_test_object.checker.visit_importfrom(
                 node)
@@ -4814,3 +4741,89 @@ class DisallowedImportsCheckerTests(unittest.TestCase):
         with self.checker_test_object.assertNoMessages():
             self.checker_test_object.checker.visit_importfrom(
                 node)
+
+
+class PreventStringConcatenationCheckerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.checker_test_object = testutils.CheckerTestCase()
+        self.checker_test_object.CHECKER_CLASS = (
+            pylint_extensions.PreventStringConcatenationChecker)
+        self.checker_test_object.setup_method()
+
+    def test_encourages_interpolation_when_joining_multiple_strings(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+            """
+            a = 'a' + 'b' #@
+            """)
+
+        expression_node = node.value
+
+        with self.checker_test_object.assertAddsMessages(
+            testutils.MessageTest(
+                msg_id='use-string-interpolation',
+                node=expression_node,
+            ),
+            ignore_position=True,
+        ):
+            self.checker_test_object.checker.visit_binop(expression_node)
+
+    def test_encourages_interpolation_for_string_variable_concatenation(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+            """
+            var1 = 'Super'
+            var2 = 'man'
+            hero = var1 + var2 #@
+            """)
+
+        expression_node = node.value
+
+        with self.checker_test_object.assertAddsMessages(
+            testutils.MessageTest(
+                msg_id='use-string-interpolation',
+                node=expression_node,
+            ),
+            ignore_position=True,
+        ):
+            self.checker_test_object.checker.visit_binop(expression_node)
+
+    def test_does_not_encourage_string_interpolation_for_addition(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+            """
+            total = 5 + 5 #@
+            """)
+
+        expression_node = node.value
+        with self.checker_test_object.assertNoMessages():
+            self.checker_test_object.checker.visit_binop(expression_node)
+
+    def test_does_not_encourage_string_interpolation_for_one_side_string_concatenation(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+            """
+            result = 'super' + 500 #@
+            """)
+
+        expression_node = node.value
+        with self.checker_test_object.assertNoMessages():
+            self.checker_test_object.checker.visit_binop(expression_node)
+
+    def test_does_not_encourage_string_interpolation_with_undefined_variable(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+            """
+            undefined_var + 'somthing here' #@
+            """)
+
+        with self.checker_test_object.assertNoMessages():
+            self.checker_test_object.checker.visit_binop(node)
+
+    def test_does_not_encourage_string_interpolation_with_datetime_addition(self) -> None: # pylint: disable=line-too-long
+        node = astroid.extract_node(
+        """
+        from datetime import datetime, timedelta
+        new_date = datetime.today() + timedelta(days=1) #@
+        """)
+
+        expression_node = node.value
+
+        with self.checker_test_object.assertNoMessages():
+            self.checker_test_object.checker.visit_binop(expression_node)

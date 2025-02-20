@@ -3,12 +3,28 @@
     height: 300px;
     margin: auto;
     max-height: 300px;
-    min-width: 460px;
   }
 
   .interactive-map-container {
     background: #fff;
     padding: 8px;
+    width: 35rem;
+  }
+
+  @media screen and (max-width: 1024px) {
+
+    .interactive-map-container {
+      padding: 8px 0;
+      width: 23rem;
+    }
+  }
+
+  @media screen and (max-width: 768px) {
+
+    .interactive-map-container {
+      padding: 8px 0;
+      width: 53rem;
+    }
   }
 
   @media screen and (max-width: 559px) {
@@ -19,6 +35,23 @@
 
     .interactive-map-container {
       padding: 8px 0;
+      width: 28rem;
+    }
+  }
+
+  @media screen and (max-width: 375px) {
+
+    .interactive-map-container {
+      padding: 8px 0;
+      width: 24rem;
+    }
+  }
+
+  @media screen and (max-width: 320px) {
+
+    .interactive-map-container {
+      padding: 8px 0;
+      width: 20rem;
     }
   }
 </style>

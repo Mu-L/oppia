@@ -18,18 +18,14 @@
 
 from __future__ import annotations
 
-import getpass
 import os
 import tempfile
 
 from core import utils
 from core.tests import test_utils
-from scripts import common
 from scripts.release_scripts import update_configs
 
 from typing import Final
-
-import github  # isort:skip pylint: disable=wrong-import-position
 
 INVALID_FECONF_CONFIG_PATH: Final = os.path.join(
     os.getcwd(), 'core', 'tests', 'release_sources',
@@ -44,298 +40,9 @@ MOCK_LOCAL_FECONF_PATH: Final = os.path.join(
     os.getcwd(), 'core', 'tests', 'release_sources',
     'feconf.txt')
 
-# Here we use MyPy ignore because the pool_size argument is required by
-# Requester.__init__(), but it is missing from the typing definition in
-# Requester.pyi. We therefore disable type checking here. Here is the
-# type definition:
-# https://github.com/PyGithub/PyGithub/blob/001970d4a828017f704f6744a5775b4207a6523c/github/Requester.pyi#L97
-MOCK_REQUESTER = github.Requester.Requester(  # type: ignore[call-arg]
-    login_or_token=None,
-    password=None,
-    jwt=None,
-    base_url='https://github.com',
-    timeout=0,
-    user_agent='user',
-    per_page=0,
-    verify=False,
-    retry=None,
-    pool_size=None,
-)
-
 
 class UpdateConfigsTests(test_utils.GenericTestBase):
     """Test the methods for updating configs."""
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.mock_repo = github.Repository.Repository(
-            requester=MOCK_REQUESTER,
-            headers={},
-            attributes={},
-            completed=False
-        )
-        def mock_get_organization(
-            unused_self: str, unused_name: str
-        ) -> github.Organization.Organization:
-            return github.Organization.Organization(
-                requester=MOCK_REQUESTER,
-                headers={},
-                attributes={},
-                completed=False
-            )
-        def mock_get_repo(
-            unused_self: str, unused_org: github.Organization.Organization
-        ) -> github.Repository.Repository:
-            return self.mock_repo
-        def mock_open_tab(unused_url: str) -> None:
-            pass
-        def mock_getpass(prompt: str) -> str:  # pylint: disable=unused-argument
-            return 'test-token'
-        def mock_url_open(unused_url: str) -> None:
-            pass
-
-        self.get_org_swap = self.swap(
-            github.Github, 'get_organization', mock_get_organization)
-        self.get_repo_swap = self.swap(
-            github.Organization.Organization, 'get_repo', mock_get_repo)
-        self.open_tab_swap = self.swap(
-            common, 'open_new_tab_in_browser_if_possible', mock_open_tab)
-        self.getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-        self.url_open_swap = self.swap(utils, 'url_open', mock_url_open)
-
-    def test_missing_mailgun_api_key_line(self) -> None:
-        mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:  # pylint: disable=unused-argument
-            return mailgun_api_key
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'%Y-%m-%d\'\n')
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap, self.assertRaisesRegex(
-            AssertionError, 'Missing mailgun API key'
-        ):
-            update_configs.add_mailgun_api_key(temp_feconf_path)
-
-    def test_missing_mailchimp_api_key_line(self) -> None:
-        mailchimp_api_key = ('%s-us18' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:  # pylint: disable=unused-argument
-            return mailchimp_api_key
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'%Y-%m-%d\'\n')
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap, self.assertRaisesRegex(
-            AssertionError, 'Missing mailchimp API key'
-        ):
-            update_configs.add_mailchimp_api_key(temp_feconf_path)
-
-    def test_invalid_mailgun_api_key(self) -> None:
-        check_prompts = {
-            'Enter mailgun api key from the release process doc.': False,
-            'You have entered an invalid mailgun api key: invalid, '
-            'please retry.': False
-        }
-        expected_check_prompts = {
-            'Enter mailgun api key from the release process doc.': True,
-            'You have entered an invalid mailgun api key: invalid, '
-            'please retry.': True
-        }
-        mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:
-            check_prompts[prompt] = True
-            if 'invalid' in prompt:
-                return mailgun_api_key
-            return 'invalid'
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n')
-        expected_feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = \'%s\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n' % (
-                mailgun_api_key))
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap:
-            update_configs.add_mailgun_api_key(temp_feconf_path)
-        self.assertEqual(check_prompts, expected_check_prompts)
-        with utils.open_file(temp_feconf_path, 'r') as f:
-            self.assertEqual(f.read(), expected_feconf_text)
-
-    def test_invalid_mailchimp_api_key(self) -> None:
-        check_prompts = {
-            'Enter mailchimp api key from the release process doc.': False,
-            'You have entered an invalid mailchimp api key: invalid, '
-            'please retry.': False
-        }
-        expected_check_prompts = {
-            'Enter mailchimp api key from the release process doc.': True,
-            'You have entered an invalid mailchimp api key: invalid, '
-            'please retry.': True
-        }
-        mailchimp_api_key = ('%s-us18' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:
-            check_prompts[prompt] = True
-            if 'invalid' in prompt:
-                return mailchimp_api_key
-            return 'invalid'
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            'MAILCHIMP_API_KEY = None\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n')
-        expected_feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            'MAILCHIMP_API_KEY = \'%s\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n' % (
-                mailchimp_api_key))
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap:
-            update_configs.add_mailchimp_api_key(temp_feconf_path)
-        self.assertEqual(check_prompts, expected_check_prompts)
-        with utils.open_file(temp_feconf_path, 'r') as f:
-            self.assertEqual(f.read(), expected_feconf_text)
-
-    def test_addition_of_mailgun_api_key(self) -> None:
-        mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:  # pylint: disable=unused-argument
-            return mailgun_api_key
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n')
-        expected_feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = \'%s\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n' % (
-                mailgun_api_key))
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap:
-            update_configs.add_mailgun_api_key(temp_feconf_path)
-        with utils.open_file(temp_feconf_path, 'r') as f:
-            self.assertEqual(f.read(), expected_feconf_text)
-
-    def test_addition_of_mailchimp_api_key(self) -> None:
-        mailchimp_api_key = ('%s-us18' % ('').join(['1'] * 32))
-        def mock_getpass(prompt: str) -> str:  # pylint: disable=unused-argument
-            return mailchimp_api_key
-        getpass_swap = self.swap(getpass, 'getpass', mock_getpass)
-
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            'MAILCHIMP_API_KEY = None\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n')
-        expected_feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            'MAILGUN_API_KEY = None\n'
-            'MAILCHIMP_API_KEY = \'%s\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n' % (
-                mailchimp_api_key))
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-
-        with getpass_swap:
-            update_configs.add_mailchimp_api_key(temp_feconf_path)
-        with utils.open_file(temp_feconf_path, 'r') as f:
-            self.assertEqual(f.read(), expected_feconf_text)
 
     def test_feconf_verification_with_correct_config(self) -> None:
         mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
@@ -359,54 +66,7 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
         with utils.open_file(temp_feconf_path, 'w') as f:
             f.write(feconf_text)
         update_configs.verify_config_files(
-            temp_feconf_path, temp_app_yaml.name, True)
-
-    def test_feconf_verification_with_mailgun_key_absent(self) -> None:
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        temp_app_yaml = tempfile.NamedTemporaryFile()
-        temp_app_yaml.write(b'')
-        feconf_text = (
-            'REDISHOST = \'192.13.2.1\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n')
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-        with self.assertRaisesRegex(
-            Exception, 'The mailgun API key must be added before deployment.'
-        ):
-            update_configs.verify_config_files(
-                temp_feconf_path, temp_app_yaml.name, True)
-
-    def test_feconf_verification_with_mailchimp_key_absent(self) -> None:
-        temp_feconf_path = tempfile.NamedTemporaryFile().name
-        temp_app_yaml = tempfile.NamedTemporaryFile()
-        temp_app_yaml.write(b'')
-        mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
-        feconf_text = (
-            'MAILGUN_API_KEY = \'%s\'\n'
-            'REDISHOST = \'192.13.2.1\'\n'
-            '# When the site terms were last updated, in UTC.\n'
-            'TERMS_PAGE_LAST_UPDATED_UTC = '
-            'datetime.datetime(2015, 10, 14, 2, 40, 0)\n'
-            '# Format of string for dashboard statistics logs.\n'
-            '# NOTE TO DEVELOPERS: This format should not be changed, '
-            'since it is used in\n'
-            '# the existing storage models for UserStatsModel.\n'
-            'DASHBOARD_STATS_DATETIME_STRING_FORMAT = \'YY-mm-dd\'\n' % (
-                mailgun_api_key))
-        with utils.open_file(temp_feconf_path, 'w') as f:
-            f.write(feconf_text)
-        with self.assertRaisesRegex(
-            Exception, 'The mailchimp API key must be added before deployment'
-        ):
-            update_configs.verify_config_files(
-                temp_feconf_path, temp_app_yaml.name, True)
+            temp_feconf_path, temp_app_yaml.name)
 
     def test_feconf_verification_with_key_absent_and_verification_disabled(
         self
@@ -427,7 +87,7 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
         with utils.open_file(temp_feconf_path, 'w') as f:
             f.write(feconf_text)
         update_configs.verify_config_files(
-            temp_feconf_path, temp_app_yaml.name, False)
+            temp_feconf_path, temp_app_yaml.name)
 
     def test_feconf_verification_with_redishost_absent(self) -> None:
         mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
@@ -453,7 +113,7 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
             Exception, 'REDISHOST must be updated before deployment.'
         ):
             update_configs.verify_config_files(
-                temp_feconf_path, temp_app_yaml.name, True)
+                temp_feconf_path, temp_app_yaml.name)
 
     def test_app_yaml_verification_with_wildcard_header_present(self) -> None:
         mailgun_api_key = ('key-%s' % ('').join(['1'] * 32))
@@ -491,7 +151,7 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
             r'a specific origin before deployment.'
         ):
             update_configs.verify_config_files(
-                temp_feconf_path, temp_app_yaml_path, True)
+                temp_feconf_path, temp_app_yaml_path)
 
     def test_update_app_yaml_correctly_updates(self) -> None:
         temp_feconf_config_path = tempfile.NamedTemporaryFile().name
@@ -569,8 +229,8 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
         with utils.open_file(MOCK_LOCAL_FECONF_PATH, 'r') as f:
             original_text = f.read()
         expected_text = original_text.replace(
-            'INCOMING_EMAILS_DOMAIN_NAME = \'\'',
-            'INCOMING_EMAILS_DOMAIN_NAME = \'oppia.org\'')
+            'ADMIN_EMAIL_ADDRESS = \'\'',
+            'ADMIN_EMAIL_ADDRESS = \'adm@example.com\'')
         try:
             update_configs.apply_changes_based_on_config(
                 MOCK_LOCAL_FECONF_PATH,
@@ -582,97 +242,6 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
             with utils.open_file(MOCK_LOCAL_FECONF_PATH, 'w') as f:
                 f.write(original_text)
 
-    def test_function_calls_with_prompt_for_feconf_and_terms_update(
-        self
-    ) -> None:
-        check_function_calls = {
-            'add_mailgun_api_key_gets_called': False,
-            'add_mailchimp_api_key_gets_called': False,
-            'apply_changes_based_on_config_gets_called': False,
-            'verify_config_files_gets_called': False,
-            'update_app_yaml_gets_called': False,
-            'mailgun_api_key_is_to_be_verified': False,
-            'mailchimp_api_key_is_to_be_verified': False,
-            'update_analytics_constants_based_on_config': False
-        }
-        expected_check_function_calls = {
-            'add_mailgun_api_key_gets_called': True,
-            'add_mailchimp_api_key_gets_called': True,
-            'apply_changes_based_on_config_gets_called': True,
-            'verify_config_files_gets_called': True,
-            'update_app_yaml_gets_called': True,
-            'mailgun_api_key_is_to_be_verified': True,
-            'mailchimp_api_key_is_to_be_verified': True,
-            'update_analytics_constants_based_on_config': True
-        }
-
-        def mock_add_mailgun_api_key(unused_release_feconf_path: str) -> None:
-            check_function_calls['add_mailgun_api_key_gets_called'] = True
-
-        def mock_add_mailchimp_api_key(unused_release_feconf_path: str) -> None:
-            check_function_calls['add_mailchimp_api_key_gets_called'] = True
-
-        def mock_apply_changes(
-            unused_local_filepath: str,
-            unused_config_filepath: str,
-            unused_expected_config_line_regex: str
-        ) -> None:
-            check_function_calls[
-                'apply_changes_based_on_config_gets_called'] = True
-
-        def mock_verify_config_files(
-            unused_release_feconf_path: str,
-            unused_release_app_dev_yaml_path: str,
-            verify_email_api_keys: bool
-        ) -> None:
-            check_function_calls['verify_config_files_gets_called'] = True
-            check_function_calls['mailgun_api_key_is_to_be_verified'] = (
-                verify_email_api_keys)
-            check_function_calls['mailchimp_api_key_is_to_be_verified'] = (
-                verify_email_api_keys)
-
-        def mock_update_app_yaml(
-            unused_release_app_dev_yaml_path: str,
-            unused_feconf_config_path: str
-        ) -> None:
-            check_function_calls['update_app_yaml_gets_called'] = True
-
-        def mock_update_analytics_constants_based_on_config(
-            unused_webpack_config_path: str,
-            unused_release_constants_path: str
-        ) -> None:
-            check_function_calls[
-                'update_analytics_constants_based_on_config'
-            ] = True
-
-        add_mailgun_api_key_swap = self.swap(
-            update_configs, 'add_mailgun_api_key', mock_add_mailgun_api_key)
-        add_mailchimp_api_key_swap = self.swap(
-            update_configs, 'add_mailchimp_api_key', mock_add_mailchimp_api_key)
-        apply_changes_swap = self.swap(
-            update_configs, 'apply_changes_based_on_config', mock_apply_changes)
-        verify_config_files_swap = self.swap(
-            update_configs, 'verify_config_files', mock_verify_config_files)
-        update_app_yaml_swap = self.swap(
-            update_configs, 'update_app_yaml', mock_update_app_yaml)
-        update_analytics_constants_based_on_config_swap = self.swap(
-            update_configs,
-            'update_analytics_constants_based_on_config',
-            mock_update_analytics_constants_based_on_config)
-
-        with self.url_open_swap, add_mailgun_api_key_swap, apply_changes_swap:
-            with verify_config_files_swap, add_mailchimp_api_key_swap:
-                with update_app_yaml_swap:
-                    with update_analytics_constants_based_on_config_swap:
-                        update_configs.main(
-                            args=[
-                                '--release_dir_path', 'test-release-dir',
-                                '--deploy_data_path', 'test-deploy-dir',
-                                '--personal_access_token', 'test-token',
-                                '--prompt_for_mailgun_and_terms_update',
-                            ])
-        self.assertEqual(check_function_calls, expected_check_function_calls)
-
     def test_function_calls_without_prompt_for_feconf_and_terms_update(
         self
     ) -> None:
@@ -680,16 +249,12 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
             'apply_changes_based_on_config_gets_called': False,
             'verify_config_files_gets_called': False,
             'update_app_yaml_gets_called': False,
-            'mailgun_api_key_is_to_be_verified': False,
-            'mailchimp_api_key_is_to_be_verified': False,
             'update_analytics_constants_based_on_config': False
         }
         expected_check_function_calls = {
             'apply_changes_based_on_config_gets_called': True,
             'verify_config_files_gets_called': True,
             'update_app_yaml_gets_called': True,
-            'mailgun_api_key_is_to_be_verified': False,
-            'mailchimp_api_key_is_to_be_verified': False,
             'update_analytics_constants_based_on_config': True
         }
 
@@ -704,13 +269,8 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
         def mock_verify_config_files(
             unused_release_feconf_path: str,
             unused_release_app_dev_yaml_path: str,
-            verify_email_api_keys: bool
         ) -> None:
             check_function_calls['verify_config_files_gets_called'] = True
-            check_function_calls['mailgun_api_key_is_to_be_verified'] = (
-                verify_email_api_keys)
-            check_function_calls['mailchimp_api_key_is_to_be_verified'] = (
-                verify_email_api_keys)
 
         def mock_update_app_yaml(
             unused_release_app_dev_yaml_path: str,
@@ -754,20 +314,20 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
             tempfile.NamedTemporaryFile().name
         )
         constants_text = (
-            '  "UA_ANALYTICS_ID": "456"\n'
             '  "GA_ANALYTICS_ID": "123"\n'
+            '  "GTM_ANALYTICS_ID": "456"\n'
             '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
         )
         analytics_constants_config_text = (
             '  "GA_ANALYTICS_ID": ""\n'
-            '  "UA_ANALYTICS_ID": ""\n'
+            '  "GTM_ANALYTICS_ID": ""\n'
             '  "SITE_NAME_FOR_ANALYTICS": ""\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": false\n'
         )
         expected_analytics_constants_config_text = (
             '  "GA_ANALYTICS_ID": "123"\n'
-            '  "UA_ANALYTICS_ID": "456"\n'
+            '  "GTM_ANALYTICS_ID": "456"\n'
             '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
         )
@@ -790,34 +350,17 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
         )
         analytics_constants_config_text = (
             '  "GA_ANALYTICS_ID": ""\n'
-            '  "UA_ANALYTICS_ID": ""\n'
+            '  "GTM_ANALYTICS_ID": ""\n'
             '  "SITE_NAME_FOR_ANALYTICS": ""\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": false\n'
         )
         with utils.open_file(temp_analytics_constants_config_path, 'w') as f:
             f.write(analytics_constants_config_text)
 
-        # Testing invalid UA_ANALYTICS_ID key.
-        constants_text = (
-            '  "UA_analytics_ID": "456"\n'
-            '  "GA_ANALYTICS_ID": "123"\n'
-            '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
-            '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
-        )
-        with utils.open_file(temp_constants_path, 'w') as f:
-            f.write(constants_text)
-        with self.assertRaisesRegex(
-            Exception, 'Error: No UA_ANALYTICS_ID key found.'
-        ):
-            update_configs.update_analytics_constants_based_on_config(
-                temp_analytics_constants_config_path,
-                temp_constants_path
-            )
-
         # Testing invalid GA_ANALYTICS_ID key.
         constants_text = (
-            '  "UA_ANALYTICS_ID": "456"\n'
             '  "GA_analytics_ID": "123"\n'
+            '  "GTM_ANALYTICS_ID": "456"\n'
             '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
         )
@@ -831,10 +374,27 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
                 temp_constants_path
             )
 
+        # Testing invalid GTM_ANALYTICS_ID key.
+        constants_text = (
+            '  "GA_ANALYTICS_ID": "123"\n'
+            '  "GTM_blablabla_ID": "123"\n'
+            '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
+            '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
+        )
+        with utils.open_file(temp_constants_path, 'w') as f:
+            f.write(constants_text)
+        with self.assertRaisesRegex(
+            Exception, 'Error: No GTM_ANALYTICS_ID key found.'
+        ):
+            update_configs.update_analytics_constants_based_on_config(
+                temp_analytics_constants_config_path,
+                temp_constants_path
+            )
+
         # Testing invalid SITE_NAME_FOR_ANALYTICS key.
         constants_text = (
-            '  "UA_ANALYTICS_ID": "456"\n'
             '  "GA_ANALYTICS_ID": "123"\n'
+            '  "GTM_ANALYTICS_ID": "456"\n'
             '  "SITE_name_for_ANALYTICS": "site-name"\n'
             '  "CAN_SEND_ANALYTICS_EVENTS": true\n'
         )
@@ -850,8 +410,8 @@ class UpdateConfigsTests(test_utils.GenericTestBase):
 
         # Testing invalid CAN_SEND_ANALYTICS_EVENTS key.
         constants_text = (
-            '  "UA_ANALYTICS_ID": "456"\n'
             '  "GA_ANALYTICS_ID": "123"\n'
+            '  "GTM_ANALYTICS_ID": "456"\n'
             '  "SITE_NAME_FOR_ANALYTICS": "site-name"\n'
             '  "can_SEND_analytics_EVENTS": true\n'
         )

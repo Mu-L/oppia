@@ -16,11 +16,11 @@
  * @fileoverview Component for the end chapter celebration check mark component.
  */
 
-import { Component } from '@angular/core';
+import {Component} from '@angular/core';
 
 @Component({
   selector: 'oppia-end-chapter-check-mark',
-  template: require('./end-chapter-check-mark.component.html'),
+  templateUrl: './end-chapter-check-mark.component.html',
 })
 export class EndChapterCheckMarkComponent {
   constructor() {}
